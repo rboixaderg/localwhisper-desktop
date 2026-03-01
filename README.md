@@ -32,6 +32,14 @@ npm run dev
 5. Prem `Guardar configuracio`.
 6. Prem `Iniciar gravacio`, parla, i `Aturar i transcriure`.
 
+### Shortcut global (macOS)
+
+- Pots configurar el shortcut des del panell (`Shortcut global iniciar/aturar`).
+- Al camp de shortcut, fes clic i prem la combinacio: es mostra amb icones de teclat macOS (`⌘ ⌥ ⇧ ⌃`).
+- Valor per defecte: `CommandOrControl+Shift+Space`.
+- Si la gravacio s'ha iniciat amb el shortcut, en acabar intenta enganxar el text a l'input actiu (`Cmd+V`).
+- Cal donar permisos de microfon i d'accessibilitat a LocalWhisper per a l'enganxat automatic.
+
 ## Packaging
 
 ```bash

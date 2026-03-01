@@ -5,9 +5,10 @@ contextBridge.exposeInMainWorld('localWhisperApi', {
   saveConfig: (config) => ipcRenderer.invoke('config:save', config),
   pickFile: (options) => ipcRenderer.invoke('file:pick', options),
   transcribe: (audioBase64) => ipcRenderer.invoke('stt:transcribe', { audioBase64 }),
+  pasteTranscription: (text) => ipcRenderer.invoke('transcription:paste', { text }),
   notifyRendererReady: () => ipcRenderer.invoke('renderer:ready'),
-  setRecordingState: (isRecording) =>
-    ipcRenderer.invoke('recording:set-state', { isRecording }),
+  setRecordingState: (isRecording, phase) =>
+    ipcRenderer.invoke('recording:set-state', { isRecording, phase }),
   onTrayCommand: (handler) => {
     if (typeof handler !== 'function') {
       return () => {};

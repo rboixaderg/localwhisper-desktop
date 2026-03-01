@@ -61,6 +61,24 @@ textarea {
   background: #fbfcfb;
 }
 
+.shortcut-help {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #4f5f5a;
+}
+
+#recordShortcut {
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: default;
+}
+
+#recordShortcut:focus {
+  outline: 2px solid #8cbba9;
+  border-color: #4f8d76;
+}
+
 .row {
   display: flex;
   gap: 10px;

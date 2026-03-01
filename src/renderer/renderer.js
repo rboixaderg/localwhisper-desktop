@@ -1,5 +1,3 @@
-const DEFAULT_RECORD_SHORTCUT = 'CommandOrControl+Shift+Space';
-
 const state = {
   stream: null,
   audioContext: null,
@@ -8,10 +6,7 @@ const state = {
   chunks: [],
   totalLength: 0,
   sampleRate: 48000,
-  isTranscribing: false,
-  autoPasteOnComplete: false,
-  recordShortcutValue: DEFAULT_RECORD_SHORTCUT,
-  pendingShortcutModifiers: new Set()
+  isTranscribing: false
 };
 
 const el = {
@@ -19,7 +14,6 @@ const el = {
   modelPath: document.getElementById('modelPath'),
   language: document.getElementById('language'),
   extraArgs: document.getElementById('extraArgs'),
-  recordShortcut: document.getElementById('recordShortcut'),
   saveConfig: document.getElementById('saveConfig'),
   pickBin: document.getElementById('pickBin'),
   pickModel: document.getElementById('pickModel'),
@@ -29,9 +23,6 @@ const el = {
   recStatus: document.getElementById('recStatus'),
   result: document.getElementById('result')
 };
-
-const MODIFIER_KEYS = new Set(['Meta', 'Control', 'Alt', 'Shift']);
-const MODIFIER_ORDER = ['CommandOrControl', 'Alt', 'Shift', 'Control'];
 
 function setConfigStatus(text, isError = false) {
   el.configStatus.textContent = text;
@@ -65,272 +56,16 @@ function isRecordingActive() {
 
 function normalizeIncomingCommand(payload) {
   if (typeof payload === 'string') {
-    return { command: payload, source: 'tray' };
+    return { command: payload };
   }
 
   if (!payload || typeof payload !== 'object') {
-    return { command: '', source: 'unknown' };
+    return { command: '' };
   }
 
   return {
-    command: typeof payload.command === 'string' ? payload.command : '',
-    source: typeof payload.source === 'string' ? payload.source : 'unknown'
+    command: typeof payload.command === 'string' ? payload.command : ''
   };
-}
-
-function normalizeRecordShortcutValue(shortcut) {
-  if (typeof shortcut !== 'string') {
-    return DEFAULT_RECORD_SHORTCUT;
-  }
-
-  const parts = shortcut
-    .split('+')
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  return parts.length > 0 ? parts.join('+') : DEFAULT_RECORD_SHORTCUT;
-}
-
-function acceleratorPartToDisplayIcon(part) {
-  const raw = String(part || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  const normalized = raw.toLowerCase();
-  if (normalized === 'commandorcontrol' || normalized === 'command') {
-    return '⌘';
-  }
-
-  if (normalized === 'alt' || normalized === 'option') {
-    return '⌥';
-  }
-
-  if (normalized === 'shift') {
-    return '⇧';
-  }
-
-  if (normalized === 'control' || normalized === 'ctrl') {
-    return '⌃';
-  }
-
-  if (normalized === 'space') {
-    return '␣';
-  }
-
-  if (normalized === 'enter' || normalized === 'return') {
-    return '↩';
-  }
-
-  if (normalized === 'tab') {
-    return '⇥';
-  }
-
-  if (normalized === 'escape' || normalized === 'esc') {
-    return '⎋';
-  }
-
-  if (normalized === 'backspace') {
-    return '⌫';
-  }
-
-  if (normalized === 'delete') {
-    return '⌦';
-  }
-
-  if (normalized === 'up') {
-    return '↑';
-  }
-
-  if (normalized === 'down') {
-    return '↓';
-  }
-
-  if (normalized === 'left') {
-    return '←';
-  }
-
-  if (normalized === 'right') {
-    return '→';
-  }
-
-  if (normalized === 'plus') {
-    return '+';
-  }
-
-  if (/^f([1-9]|1[0-9]|2[0-4])$/.test(normalized)) {
-    return normalized.toUpperCase();
-  }
-
-  if (raw.length === 1) {
-    return raw.toUpperCase();
-  }
-
-  return raw;
-}
-
-function formatShortcutForDisplay(shortcut) {
-  const normalized = normalizeRecordShortcutValue(shortcut);
-  return normalized
-    .split('+')
-    .map((part) => acceleratorPartToDisplayIcon(part))
-    .filter(Boolean)
-    .join(' ');
-}
-
-function setRecordShortcutValue(shortcut) {
-  const normalized = normalizeRecordShortcutValue(shortcut);
-  state.recordShortcutValue = normalized;
-  el.recordShortcut.value = formatShortcutForDisplay(normalized);
-  el.recordShortcut.title = normalized;
-}
-
-function resetPendingShortcutModifiers() {
-  state.pendingShortcutModifiers.clear();
-}
-
-function getModifierTokenFromKey(key) {
-  if (key === 'Meta') {
-    return 'CommandOrControl';
-  }
-  if (key === 'Alt') {
-    return 'Alt';
-  }
-  if (key === 'Shift') {
-    return 'Shift';
-  }
-  if (key === 'Control') {
-    return 'Control';
-  }
-  return '';
-}
-
-function getModifierTokensFromEvent(event) {
-  const modifiers = [];
-  if (event.metaKey) {
-    modifiers.push('CommandOrControl');
-  }
-  if (event.altKey) {
-    modifiers.push('Alt');
-  }
-  if (event.shiftKey) {
-    modifiers.push('Shift');
-  }
-  if (event.ctrlKey) {
-    modifiers.push('Control');
-  }
-  return modifiers;
-}
-
-function getOrderedModifierTokens(modifierSet) {
-  return MODIFIER_ORDER.filter((modifier) => modifierSet.has(modifier));
-}
-
-function getPrimaryShortcutKeyFromEvent(event) {
-  const key = String(event.key || '');
-
-  if (!key || MODIFIER_KEYS.has(key)) {
-    return '';
-  }
-
-  if (key === ' ' || key === 'Spacebar') {
-    return 'Space';
-  }
-
-  if (key === '+') {
-    return 'Plus';
-  }
-
-  if (/^[a-z]$/i.test(key)) {
-    return key.toUpperCase();
-  }
-
-  if (/^[0-9]$/.test(key)) {
-    return key;
-  }
-
-  if (/^F([1-9]|1[0-9]|2[0-4])$/i.test(key)) {
-    return key.toUpperCase();
-  }
-
-  const map = {
-    Enter: 'Enter',
-    Return: 'Enter',
-    Tab: 'Tab',
-    Escape: 'Escape',
-    Esc: 'Escape',
-    Backspace: 'Backspace',
-    Delete: 'Delete',
-    ArrowUp: 'Up',
-    ArrowDown: 'Down',
-    ArrowLeft: 'Left',
-    ArrowRight: 'Right',
-    Home: 'Home',
-    End: 'End',
-    PageUp: 'PageUp',
-    PageDown: 'PageDown'
-  };
-
-  if (map[key]) {
-    return map[key];
-  }
-
-  if (key.length === 1 && !/\s/.test(key)) {
-    return key.toUpperCase();
-  }
-
-  return '';
-}
-
-function captureRecordShortcutFromKeyboardEvent(event) {
-  const noModifierPressed = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
-  if (event.key === 'Tab' && noModifierPressed && state.pendingShortcutModifiers.size === 0) {
-    return;
-  }
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  if ((event.key === 'Backspace' || event.key === 'Delete') && noModifierPressed) {
-    resetPendingShortcutModifiers();
-    setRecordShortcutValue(DEFAULT_RECORD_SHORTCUT);
-    setConfigStatus('Shortcut restaurat al valor per defecte.');
-    return;
-  }
-
-  if (event.key === 'Escape' && noModifierPressed) {
-    resetPendingShortcutModifiers();
-    setRecordShortcutValue(state.recordShortcutValue);
-    setConfigStatus('Captura de shortcut cancel·lada.');
-    return;
-  }
-
-  const currentModifiers = new Set(state.pendingShortcutModifiers);
-  for (const modifier of getModifierTokensFromEvent(event)) {
-    currentModifiers.add(modifier);
-  }
-  const modifierFromCurrentKey = getModifierTokenFromKey(event.key);
-  if (modifierFromCurrentKey) {
-    currentModifiers.add(modifierFromCurrentKey);
-  }
-
-  const primaryKey = getPrimaryShortcutKeyFromEvent(event);
-  if (!primaryKey) {
-    state.pendingShortcutModifiers = currentModifiers;
-    const modifierPreview = getOrderedModifierTokens(currentModifiers).join('+');
-    if (modifierPreview) {
-      el.recordShortcut.value = formatShortcutForDisplay(modifierPreview);
-      el.recordShortcut.title = modifierPreview;
-      setConfigStatus('Afegeix una tecla principal per completar el shortcut.');
-    }
-    return;
-  }
-
-  const orderedParts = [...getOrderedModifierTokens(currentModifiers), primaryKey];
-  const accelerator = orderedParts.join('+');
-  resetPendingShortcutModifiers();
-  setRecordShortcutValue(accelerator);
-  setConfigStatus(`Shortcut seleccionat: ${formatShortcutForDisplay(accelerator)}.`);
 }
 
 function releaseRecordingResources() {
@@ -369,8 +104,7 @@ function getConfigFromUi() {
     whisperBinPath: el.whisperBinPath.value.trim(),
     modelPath: el.modelPath.value.trim(),
     language: el.language.value.trim() || 'auto',
-    extraArgs: el.extraArgs.value.trim(),
-    recordShortcut: state.recordShortcutValue || DEFAULT_RECORD_SHORTCUT
+    extraArgs: el.extraArgs.value.trim()
   };
 }
 
@@ -379,7 +113,6 @@ function setConfigToUi(config) {
   el.modelPath.value = config.modelPath || '';
   el.language.value = config.language || 'auto';
   el.extraArgs.value = config.extraArgs || '-otxt';
-  setRecordShortcutValue(config.recordShortcut || DEFAULT_RECORD_SHORTCUT);
 }
 
 async function loadInitialConfig() {
@@ -418,7 +151,7 @@ async function pickModel() {
   }
 }
 
-async function startRecording({ autoPasteOnComplete = false } = {}) {
+async function startRecording() {
   if (state.isTranscribing) {
     setRecStatus('Espera que acabi la transcripcio actual.', true);
     return;
@@ -427,8 +160,6 @@ async function startRecording({ autoPasteOnComplete = false } = {}) {
   if (isRecordingActive()) {
     return;
   }
-
-  state.autoPasteOnComplete = Boolean(autoPasteOnComplete);
 
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -456,7 +187,6 @@ async function startRecording({ autoPasteOnComplete = false } = {}) {
     setRecStatus('Gravant...');
     syncRecordingState(true, 'recording');
   } catch (error) {
-    state.autoPasteOnComplete = false;
     releaseRecordingResources();
     syncRecordingState(false, 'idle');
     setRecStatus(error.message || 'No s\'ha pogut iniciar la gravacio.', true);
@@ -469,7 +199,6 @@ async function stopRecordingAndTranscribe() {
   }
 
   if (!isRecordingActive()) {
-    state.autoPasteOnComplete = false;
     syncRecordingState(false, 'idle');
     el.startRec.disabled = false;
     el.stopRec.disabled = true;
@@ -478,7 +207,6 @@ async function stopRecordingAndTranscribe() {
   }
 
   state.isTranscribing = true;
-  const shouldAutoPaste = state.autoPasteOnComplete;
 
   try {
     el.stopRec.disabled = true;
@@ -504,26 +232,11 @@ async function stopRecordingAndTranscribe() {
     const text = await window.localWhisperApi.transcribe(audioBase64);
     el.result.value = text || '[Sense sortida textual]';
 
-    if (text && shouldAutoPaste && typeof window.localWhisperApi.pasteTranscription === 'function') {
-      const pasteResult = await window.localWhisperApi.pasteTranscription(text);
-      if (pasteResult && pasteResult.ok) {
-        setRecStatus(pasteResult.message || 'Completat i enganxat.');
-      } else {
-        setRecStatus(
-          (pasteResult && pasteResult.message) ||
-            'Completat. Text copiat al porta-retalls, enganxa manualment amb Cmd+V.',
-          true
-        );
-      }
-      return;
-    }
-
     setRecStatus('Completat');
   } catch (error) {
     setRecStatus(error.message || 'Error de transcripcio.', true);
   } finally {
     state.isTranscribing = false;
-    state.autoPasteOnComplete = false;
     releaseRecordingResources();
     syncRecordingState(false, 'idle');
     el.startRec.disabled = false;
@@ -534,10 +247,10 @@ async function stopRecordingAndTranscribe() {
 }
 
 function handleTrayCommand(payload) {
-  const { command, source } = normalizeIncomingCommand(payload);
+  const { command } = normalizeIncomingCommand(payload);
 
   if (command === 'start') {
-    startRecording({ autoPasteOnComplete: source === 'shortcut' });
+    startRecording();
     return;
   }
 
@@ -549,22 +262,12 @@ function handleTrayCommand(payload) {
 el.saveConfig.addEventListener('click', saveConfig);
 el.pickBin.addEventListener('click', pickWhisperBin);
 el.pickModel.addEventListener('click', pickModel);
-el.recordShortcut.addEventListener('keydown', captureRecordShortcutFromKeyboardEvent);
-el.recordShortcut.addEventListener('focus', () => {
-  resetPendingShortcutModifiers();
-  setConfigStatus('Prem la combinacio de tecles per al shortcut global.');
-});
-el.recordShortcut.addEventListener('blur', () => {
-  resetPendingShortcutModifiers();
-  setRecordShortcutValue(state.recordShortcutValue);
-});
 el.startRec.addEventListener('click', () => {
-  startRecording({ autoPasteOnComplete: false });
+  startRecording();
 });
 el.stopRec.addEventListener('click', stopRecordingAndTranscribe);
 const unsubscribeTray = window.localWhisperApi.onTrayCommand(handleTrayCommand);
 
-setRecordShortcutValue(state.recordShortcutValue);
 loadInitialConfig().catch((error) => {
   setConfigStatus(error.message || 'No s\'ha pogut carregar configuracio.', true);
 });

@@ -39,6 +39,7 @@ npm run dev
 - Valor per defecte: `CommandOrControl+Shift+Space`.
 - Si la gravacio s'ha iniciat amb el shortcut, en acabar intenta enganxar el text a l'input actiu (`Cmd+V`).
 - Cal donar permisos de microfon i d'accessibilitat a LocalWhisper per a l'enganxat automatic.
+- En mode `npm run dev`, macOS pot mostrar permisos sota "Electron" en lloc de "LocalWhisper". Per validar permisos finals, prova una build empaquetada (`npm run dist`).
 
 ## Packaging
 

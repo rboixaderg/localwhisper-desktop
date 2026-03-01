@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "check": "node --check src/main/*.js src/renderer/*.js src/shared/*.js scripts/*.js",
     "generate:tray-icons": "node scripts/generate-tray-icons.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
@@ -29,7 +30,10 @@
     },
     "mac": {
       "icon": "build/icon.png",
-      "target": "dmg"
+      "target": "dmg",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "LocalWhisper necessita accés al micròfon per enregistrar i transcriure veu."
+      }
     },
     "win": {
       "icon": "build/icon.png",

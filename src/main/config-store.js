@@ -2,14 +2,11 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { app } = require('electron');
 
-const DEFAULT_RECORD_SHORTCUT = 'CommandOrControl+Shift+Space';
-
 const DEFAULT_CONFIG = {
   whisperBinPath: '',
   modelPath: '',
   language: 'auto',
-  extraArgs: '-otxt',
-  recordShortcut: DEFAULT_RECORD_SHORTCUT
+  extraArgs: '-otxt'
 };
 
 function getConfigPath() {
@@ -46,11 +43,7 @@ function sanitizeConfig(config, strict = false) {
       typeof merged.whisperBinPath === 'string' ? merged.whisperBinPath.trim() : '',
     modelPath: typeof merged.modelPath === 'string' ? merged.modelPath.trim() : '',
     language: normalizeLanguage(merged.language, strict),
-    extraArgs: typeof merged.extraArgs === 'string' ? merged.extraArgs.trim() : '',
-    recordShortcut:
-      typeof merged.recordShortcut === 'string' && merged.recordShortcut.trim()
-        ? merged.recordShortcut.trim()
-        : DEFAULT_RECORD_SHORTCUT
+    extraArgs: typeof merged.extraArgs === 'string' ? merged.extraArgs.trim() : ''
   };
 }
 
@@ -77,6 +70,5 @@ async function saveConfig(config) {
 module.exports = {
   loadConfig,
   saveConfig,
-  DEFAULT_CONFIG,
-  DEFAULT_RECORD_SHORTCUT
+  DEFAULT_CONFIG
 };

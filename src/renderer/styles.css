@@ -1,0 +1,100 @@
+:root {
+  --bg: #f4f7f1;
+  --panel: #ffffff;
+  --accent: #1f7a5a;
+  --text: #1c2321;
+  --border: #d5dfda;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top left, #e3efe6 0%, var(--bg) 60%);
+}
+
+.app {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1,
+h2 {
+  margin: 0 0 12px;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+label {
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfb;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #7ca798;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 14px;
+}
+
+textarea {
+  margin-top: 10px;
+  min-height: 220px;
+  resize: vertical;
+}
+
+@media (max-width: 700px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

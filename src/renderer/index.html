@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ca">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocalWhisper</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>LocalWhisper</h1>
+      <p class="subtitle">Speech-to-text local amb models custom de whisper.cpp</p>
+
+      <section class="panel">
+        <h2>Configuracio</h2>
+
+        <label>Ruta binari whisper.cpp (main o cli)</label>
+        <div class="row">
+          <input id="whisperBinPath" type="text" placeholder="/path/to/whisper-cli" />
+          <button id="pickBin">Seleccionar</button>
+        </div>
+
+        <label>Ruta model (.bin, .gguf segons build)</label>
+        <div class="row">
+          <input id="modelPath" type="text" placeholder="/path/to/model.bin" />
+          <button id="pickModel">Seleccionar</button>
+        </div>
+
+        <label>Llengua (auto, ca, es, en...)</label>
+        <input id="language" type="text" placeholder="auto" />
+
+        <label>Args extra whisper.cpp</label>
+        <input id="extraArgs" type="text" placeholder="-otxt" />
+
+        <div class="row">
+          <button id="saveConfig">Guardar configuracio</button>
+          <span id="configStatus" class="status"></span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Transcripcio</h2>
+        <p>Manten local: prem "Iniciar", parla, i prem "Aturar i transcriure".</p>
+
+        <div class="row">
+          <button id="startRec">Iniciar gravacio</button>
+          <button id="stopRec" disabled>Aturar i transcriure</button>
+          <span id="recStatus" class="status">Aturat</span>
+        </div>
+
+        <textarea id="result" rows="12" placeholder="La transcripcio apareixera aqui..."></textarea>
+      </section>
+    </main>
+
+    <script src="../shared/audio-utils.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

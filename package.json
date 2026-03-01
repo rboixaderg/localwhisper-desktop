@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "generate:tray-icons": "node scripts/generate-tray-icons.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
@@ -18,6 +19,7 @@
   "build": {
     "appId": "cat.roger.localwhisper",
     "productName": "LocalWhisper",
+    "icon": "build/icon.png",
     "files": [
       "src/**/*",
       "package.json"
@@ -26,12 +28,15 @@
       "output": "dist"
     },
     "mac": {
+      "icon": "build/icon.png",
       "target": "dmg"
     },
     "win": {
+      "icon": "build/icon.png",
       "target": "nsis"
     },
     "linux": {
+      "icon": "build/icon.png",
       "target": [
         "AppImage",
         "deb"

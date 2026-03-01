@@ -33,6 +33,57 @@ function setRecStatus(text, isError = false) {
   el.recStatus.style.color = isError ? '#9f1d1d' : '#1c2321';
 }
 
+function syncRecordingState(isRecording) {
+  if (!window.localWhisperApi || typeof window.localWhisperApi.setRecordingState !== 'function') {
+    return;
+  }
+
+  window.localWhisperApi.setRecordingState(isRecording).catch(() => {});
+}
+
+function notifyRendererReady() {
+  if (!window.localWhisperApi || typeof window.localWhisperApi.notifyRendererReady !== 'function') {
+    return;
+  }
+
+  window.localWhisperApi.notifyRendererReady().catch(() => {});
+}
+
+function isRecordingActive() {
+  return Boolean(state.stream && state.audioContext && state.sourceNode && state.processorNode);
+}
+
+function releaseRecordingResources() {
+  if (state.processorNode) {
+    try {
+      state.processorNode.disconnect();
+    } catch {}
+  }
+
+  if (state.sourceNode) {
+    try {
+      state.sourceNode.disconnect();
+    } catch {}
+  }
+
+  if (state.stream) {
+    try {
+      state.stream.getTracks().forEach((track) => track.stop());
+    } catch {}
+  }
+
+  if (state.audioContext) {
+    try {
+      state.audioContext.close();
+    } catch {}
+  }
+
+  state.processorNode = null;
+  state.sourceNode = null;
+  state.stream = null;
+  state.audioContext = null;
+}
+
 function getConfigFromUi() {
   return {
     whisperBinPath: el.whisperBinPath.value.trim(),
@@ -85,6 +136,10 @@ async function pickModel() {
 }
 
 async function startRecording() {
+  if (isRecordingActive()) {
+    return;
+  }
+
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     state.audioContext = new window.AudioContext();
@@ -109,12 +164,23 @@ async function startRecording() {
     el.startRec.disabled = true;
     el.stopRec.disabled = false;
     setRecStatus('Gravant...');
+    syncRecordingState(true);
   } catch (error) {
+    releaseRecordingResources();
+    syncRecordingState(false);
     setRecStatus(error.message || 'No s\'ha pogut iniciar la gravacio.', true);
   }
 }
 
 async function stopRecordingAndTranscribe() {
+  if (!isRecordingActive()) {
+    syncRecordingState(false);
+    el.startRec.disabled = false;
+    el.stopRec.disabled = true;
+    setRecStatus('No hi ha cap gravacio activa.', true);
+    return;
+  }
+
   try {
     el.stopRec.disabled = true;
     setRecStatus('Processant audio...');
@@ -123,6 +189,11 @@ async function stopRecordingAndTranscribe() {
     state.sourceNode.disconnect();
     state.stream.getTracks().forEach((track) => track.stop());
     await state.audioContext.close();
+    state.processorNode = null;
+    state.sourceNode = null;
+    state.stream = null;
+    state.audioContext = null;
+    syncRecordingState(false);
 
     const merged = window.audioUtils.mergeFloat32(state.chunks, state.totalLength);
     const downsampled = window.audioUtils.downsampleBuffer(merged, state.sampleRate, 16000);
@@ -137,10 +208,23 @@ async function stopRecordingAndTranscribe() {
   } catch (error) {
     setRecStatus(error.message || 'Error de transcripcio.', true);
   } finally {
+    releaseRecordingResources();
+    syncRecordingState(false);
     el.startRec.disabled = false;
     el.stopRec.disabled = true;
     state.chunks = [];
     state.totalLength = 0;
+  }
+}
+
+function handleTrayCommand(command) {
+  if (command === 'start') {
+    startRecording();
+    return;
+  }
+
+  if (command === 'stop') {
+    stopRecordingAndTranscribe();
   }
 }
 
@@ -149,7 +233,18 @@ el.pickBin.addEventListener('click', pickWhisperBin);
 el.pickModel.addEventListener('click', pickModel);
 el.startRec.addEventListener('click', startRecording);
 el.stopRec.addEventListener('click', stopRecordingAndTranscribe);
+const unsubscribeTray = window.localWhisperApi.onTrayCommand(handleTrayCommand);
 
 loadInitialConfig().catch((error) => {
   setConfigStatus(error.message || 'No s\'ha pogut carregar configuracio.', true);
+});
+notifyRendererReady();
+syncRecordingState(false);
+
+window.addEventListener('beforeunload', () => {
+  if (typeof unsubscribeTray === 'function') {
+    unsubscribeTray();
+  }
+
+  syncRecordingState(false);
 });

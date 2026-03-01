@@ -23,6 +23,24 @@ function parseExtraArgs(raw) {
     .filter(Boolean);
 }
 
+function compactStderr(stderr) {
+  const clean = (stderr || '').trim();
+  if (!clean) {
+    return '(empty)';
+  }
+
+  if (clean.length <= 700) {
+    return clean;
+  }
+
+  return `${clean.slice(0, 700)}...`;
+}
+
+function isGpuCrashError(error) {
+  const message = error?.message || '';
+  return /exit 139|signal SIGSEGV/i.test(message);
+}
+
 function runCommand(binPath, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(binPath, args, {
@@ -42,11 +60,18 @@ function runCommand(binPath, args) {
 
     proc.on('error', reject);
 
-    proc.on('close', (code) => {
-      if (code !== 0) {
+    proc.on('close', (code, signal) => {
+      if (code !== 0 || signal) {
+        const codeText = typeof code === 'number' ? String(code) : 'unknown';
+        const signalText = signal ? `, signal ${signal}` : '';
+        const hint =
+          code === 139 || signal === 'SIGSEGV'
+            ? ' Hint: on some macOS setups, add "-ng" in Args extra to disable GPU.'
+            : '';
+
         reject(
           new Error(
-            `whisper.cpp exit code ${code}. stderr: ${stderr || '(empty)'}`
+            `whisper.cpp failed (exit ${codeText}${signalText}). stderr: ${compactStderr(stderr)}${hint}`
           )
         );
         return;
@@ -89,8 +114,49 @@ async function transcribeAudio({ audioBase64, config }) {
       args.push('-l', language);
     }
 
-    const { stdout } = await runCommand(whisperBinPath, args);
-    return (stdout || '').trim();
+    let commandResult;
+    try {
+      commandResult = await runCommand(whisperBinPath, args);
+    } catch (error) {
+      // On some Apple Silicon systems whisper-cli can crash on GPU path; retry once with -ng.
+      if (process.platform === 'darwin' && !args.includes('-ng') && isGpuCrashError(error)) {
+        commandResult = await runCommand(whisperBinPath, [...args, '-ng']);
+      } else {
+        throw error;
+      }
+    }
+
+    const { stdout, stderr } = commandResult;
+    let text = (stdout || '').trim();
+
+    // Some whisper.cpp builds write text output to a sidecar file when -otxt is used.
+    if (!text) {
+      const outputTextPath = `${audioPath}.txt`;
+      if (await fileExists(outputTextPath)) {
+        const fileText = await fs.readFile(outputTextPath, 'utf8');
+        text = fileText.trim();
+      }
+    }
+
+    if (!text) {
+      const stderrText = (stderr || '').trim();
+
+      if (/unknown language/i.test(stderrText)) {
+        throw new Error(
+          'Invalid language code. Use "auto" or a 2/3-letter code like "ca", "es" or "en".'
+        );
+      }
+
+      if (stderrText) {
+        throw new Error(`Whisper returned no text. stderr: ${compactStderr(stderrText)}`);
+      }
+
+      throw new Error(
+        'Whisper returned no text. Try speaking longer, or add "-ng" to Args extra on macOS.'
+      );
+    }
+
+    return text;
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }

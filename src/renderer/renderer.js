@@ -112,7 +112,7 @@ function setConfigToUi(config) {
   el.whisperBinPath.value = config.whisperBinPath || '';
   el.modelPath.value = config.modelPath || '';
   el.language.value = config.language || 'auto';
-  el.extraArgs.value = config.extraArgs || '-otxt';
+  el.extraArgs.value = config.extraArgs || '';
 }
 
 async function loadInitialConfig() {
@@ -164,6 +164,7 @@ async function startRecording() {
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     state.audioContext = new window.AudioContext();
+    await state.audioContext.resume();
     state.sampleRate = state.audioContext.sampleRate;
     state.sourceNode = state.audioContext.createMediaStreamSource(state.stream);
     state.processorNode = state.audioContext.createScriptProcessor(4096, 1, 1);
@@ -223,7 +224,26 @@ async function stopRecordingAndTranscribe() {
     state.audioContext = null;
     syncRecordingState(false, 'processing');
 
+    if (state.totalLength === 0 || state.chunks.length === 0) {
+      setRecStatus('No s\'ha capturat audio. Verifica els permisos del microfon.', true);
+      return;
+    }
+
     const merged = window.audioUtils.mergeFloat32(state.chunks, state.totalLength);
+
+    let peak = 0;
+    for (let i = 0; i < merged.length; i += 1) {
+      const abs = Math.abs(merged[i]);
+      if (abs > peak) peak = abs;
+    }
+    if (peak < 0.001) {
+      setRecStatus(
+        'Audio silencio\u0301s. El micro\u0300fon pot estar silenciat o sense permisos.',
+        true
+      );
+      return;
+    }
+
     const downsampled = window.audioUtils.downsampleBuffer(merged, state.sampleRate, 16000);
     const wavBuffer = window.audioUtils.encodeWavFromFloat32(downsampled, 16000);
     const audioBase64 = window.audioUtils.arrayBufferToBase64(wavBuffer);

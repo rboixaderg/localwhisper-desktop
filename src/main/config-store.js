@@ -6,7 +6,7 @@ const DEFAULT_CONFIG = {
   whisperBinPath: '',
   modelPath: '',
   language: 'auto',
-  extraArgs: '-otxt'
+  extraArgs: ''
 };
 
 function getConfigPath() {

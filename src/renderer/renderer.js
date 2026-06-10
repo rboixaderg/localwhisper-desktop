@@ -6,7 +6,9 @@ const state = {
   chunks: [],
   totalLength: 0,
   sampleRate: 48000,
-  isTranscribing: false
+  isTranscribing: false,
+  recordingSource: 'manual',
+  appName: 'LocalWhisper'
 };
 
 const el = {
@@ -14,6 +16,8 @@ const el = {
   modelPath: document.getElementById('modelPath'),
   language: document.getElementById('language'),
   extraArgs: document.getElementById('extraArgs'),
+  shortcut: document.getElementById('shortcut'),
+  clearShortcut: document.getElementById('clearShortcut'),
   saveConfig: document.getElementById('saveConfig'),
   pickBin: document.getElementById('pickBin'),
   pickModel: document.getElementById('pickModel'),
@@ -21,7 +25,8 @@ const el = {
   startRec: document.getElementById('startRec'),
   stopRec: document.getElementById('stopRec'),
   recStatus: document.getElementById('recStatus'),
-  result: document.getElementById('result')
+  result: document.getElementById('result'),
+  accessibilityBtn: document.getElementById('openAccessibility')
 };
 
 function setConfigStatus(text, isError = false) {
@@ -32,6 +37,13 @@ function setConfigStatus(text, isError = false) {
 function setRecStatus(text, isError = false) {
   el.recStatus.textContent = text;
   el.recStatus.style.color = isError ? '#9f1d1d' : '#1c2321';
+}
+
+function setShortcutStatus(text, isError = false) {
+  const el = document.getElementById('shortcutStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = isError ? '#9f1d1d' : '#1c2321';
 }
 
 function syncRecordingState(isRecording, phase = isRecording ? 'recording' : 'idle') {
@@ -56,15 +68,16 @@ function isRecordingActive() {
 
 function normalizeIncomingCommand(payload) {
   if (typeof payload === 'string') {
-    return { command: payload };
+    return { command: payload, source: 'unknown' };
   }
 
   if (!payload || typeof payload !== 'object') {
-    return { command: '' };
+    return { command: '', source: 'unknown' };
   }
 
   return {
-    command: typeof payload.command === 'string' ? payload.command : ''
+    command: typeof payload.command === 'string' ? payload.command : '',
+    source: typeof payload.source === 'string' ? payload.source : 'unknown'
   };
 }
 
@@ -104,7 +117,8 @@ function getConfigFromUi() {
     whisperBinPath: el.whisperBinPath.value.trim(),
     modelPath: el.modelPath.value.trim(),
     language: el.language.value.trim() || 'auto',
-    extraArgs: el.extraArgs.value.trim()
+    extraArgs: el.extraArgs.value.trim(),
+    shortcut: el.shortcut.value.trim()
   };
 }
 
@@ -113,11 +127,35 @@ function setConfigToUi(config) {
   el.modelPath.value = config.modelPath || '';
   el.language.value = config.language || 'auto';
   el.extraArgs.value = config.extraArgs || '';
+  el.shortcut.value = config.shortcut || '';
 }
 
 async function loadInitialConfig() {
   const config = await window.localWhisperApi.loadConfig();
   setConfigToUi(config);
+  updateShortcutFeedbackFromMain();
+}
+
+async function loadPermissionsStatus() {
+  try {
+    const status = await window.localWhisperApi.getPermissionsStatus();
+    state.appName = status.appName || 'LocalWhisper';
+  } catch {}
+}
+
+async function updateShortcutFeedbackFromMain() {
+  try {
+    const status = await window.localWhisperApi.getShortcutStatus();
+    if (!status.registered) {
+      if (status.error) {
+        setShortcutStatus(status.error, true);
+      } else if (!status.accelerator) {
+        setShortcutStatus('Shortcut desactivat.');
+      }
+    } else {
+      setShortcutStatus('');
+    }
+  } catch {}
 }
 
 async function saveConfig() {
@@ -126,6 +164,9 @@ async function saveConfig() {
     const savedConfig = await window.localWhisperApi.saveConfig(config);
     setConfigToUi(savedConfig);
     setConfigStatus('Configuracio guardada.');
+
+    await window.localWhisperApi.registerShortcut(savedConfig.shortcut);
+    updateShortcutFeedbackFromMain();
   } catch (error) {
     setConfigStatus(error.message || 'Error guardant configuracio.', true);
   }
@@ -151,7 +192,60 @@ async function pickModel() {
   }
 }
 
-async function startRecording() {
+function eventToAccelerator(event) {
+  const parts = [];
+
+  if (event.metaKey || event.ctrlKey) parts.push('CommandOrControl');
+
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+
+  const key = event.key;
+  if (key === ' ') {
+    parts.push('Space');
+  } else if (key.length === 1 && /[a-zA-Z0-9]/.test(key)) {
+    parts.push(key.toUpperCase());
+  } else if (key.length > 1 && key.startsWith('F') && /^F\d+$/.test(key)) {
+    parts.push(key);
+  } else {
+    return '';
+  }
+
+  return parts.length > 1 ? parts.join('+') : '';
+}
+
+function handleShortcutKeydown(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const accelerator = eventToAccelerator(event);
+  if (accelerator) {
+    el.shortcut.value = accelerator;
+  }
+}
+
+function handleClearShortcut() {
+  el.shortcut.value = '';
+  setShortcutStatus('Shortcut desactivat. Guarda la configuracio per aplicar.');
+}
+
+async function openAccessibilityPermissions() {
+  try {
+    const result = await window.localWhisperApi.openAccessibilityPermissions();
+    if (result && result.trusted) {
+      setRecStatus('Permisos d\'Accessibilitat concedits correctament.');
+    } else {
+      setRecStatus(
+        'Afegeix ' + state.appName + ' a System Settings > Privacy & Security > Accessibility.',
+        true
+      );
+    }
+  } catch (error) {
+    setRecStatus('No s\'ha pogut obrir permisos: ' + (error.message || ''), true);
+  }
+}
+
+async function startRecording(source = 'manual') {
   if (state.isTranscribing) {
     setRecStatus('Espera que acabi la transcripcio actual.', true);
     return;
@@ -171,6 +265,7 @@ async function startRecording() {
 
     state.chunks = [];
     state.totalLength = 0;
+    state.recordingSource = source;
 
     state.processorNode.onaudioprocess = (event) => {
       const input = event.inputBuffer.getChannelData(0);
@@ -207,6 +302,7 @@ async function stopRecordingAndTranscribe() {
     return;
   }
 
+  const source = state.recordingSource;
   state.isTranscribing = true;
 
   try {
@@ -249,10 +345,36 @@ async function stopRecordingAndTranscribe() {
     const audioBase64 = window.audioUtils.arrayBufferToBase64(wavBuffer);
 
     setRecStatus('Transcrivint...');
+    syncRecordingState(false, 'transcribing');
     const text = await window.localWhisperApi.transcribe(audioBase64);
     el.result.value = text || '[Sense sortida textual]';
 
-    setRecStatus('Completat');
+    if (source === 'shortcut' && text) {
+      try {
+        setRecStatus('Enganxant text...');
+        syncRecordingState(false, 'pasting');
+        await window.localWhisperApi.pasteText(text);
+        setRecStatus('Completat i enganxat');
+      } catch (pasteError) {
+        const isAccessibility =
+          /System Events|access|permission|not allowed/i.test(pasteError.message || '');
+        if (isAccessibility) {
+          setRecStatus(
+            'Completat, pero no s\'ha pogut enganxar. Concedeix permisos d\'Accessibilitat a ' +
+              state.appName +
+              '.',
+            true
+          );
+        } else {
+          setRecStatus(
+            'Completat, pero no s\'ha pogut enganxar. El text es al porta-retalls.',
+            true
+          );
+        }
+      }
+    } else {
+      setRecStatus('Completat');
+    }
   } catch (error) {
     setRecStatus(error.message || 'Error de transcripcio.', true);
   } finally {
@@ -263,14 +385,15 @@ async function stopRecordingAndTranscribe() {
     el.stopRec.disabled = true;
     state.chunks = [];
     state.totalLength = 0;
+    state.recordingSource = 'manual';
   }
 }
 
 function handleTrayCommand(payload) {
-  const { command } = normalizeIncomingCommand(payload);
+  const { command, source } = normalizeIncomingCommand(payload);
 
   if (command === 'start') {
-    startRecording();
+    startRecording(source || 'tray');
     return;
   }
 
@@ -279,24 +402,69 @@ function handleTrayCommand(payload) {
   }
 }
 
+function handleShortcutCommand(payload) {
+  const { command, source } = normalizeIncomingCommand(payload);
+
+  if (command === 'start') {
+    startRecording(source || 'shortcut');
+    return;
+  }
+
+  if (command === 'stop') {
+    stopRecordingAndTranscribe();
+  }
+}
+
+function handleShortcutStatus(payload) {
+  if (!payload) return;
+
+  if (!payload.registered) {
+    if (payload.error) {
+      setShortcutStatus(payload.error, true);
+    } else if (!payload.accelerator) {
+      setShortcutStatus('Shortcut desactivat.');
+    }
+  } else {
+    setShortcutStatus('');
+  }
+}
+
 el.saveConfig.addEventListener('click', saveConfig);
 el.pickBin.addEventListener('click', pickWhisperBin);
 el.pickModel.addEventListener('click', pickModel);
 el.startRec.addEventListener('click', () => {
-  startRecording();
+  startRecording('manual');
 });
 el.stopRec.addEventListener('click', stopRecordingAndTranscribe);
+el.shortcut.addEventListener('keydown', handleShortcutKeydown);
+el.clearShortcut.addEventListener('click', handleClearShortcut);
+
+if (el.accessibilityBtn) {
+  el.accessibilityBtn.addEventListener('click', openAccessibilityPermissions);
+}
+
 const unsubscribeTray = window.localWhisperApi.onTrayCommand(handleTrayCommand);
+const unsubscribeShortcut = window.localWhisperApi.onShortcutCommand(handleShortcutCommand);
+const unsubscribeShortcutStatus = window.localWhisperApi.onShortcutStatus(handleShortcutStatus);
 
 loadInitialConfig().catch((error) => {
   setConfigStatus(error.message || 'No s\'ha pogut carregar configuracio.', true);
 });
+loadPermissionsStatus();
 notifyRendererReady();
 syncRecordingState(false, 'idle');
 
 window.addEventListener('beforeunload', () => {
   if (typeof unsubscribeTray === 'function') {
     unsubscribeTray();
+  }
+
+  if (typeof unsubscribeShortcut === 'function') {
+    unsubscribeShortcut();
+  }
+
+  if (typeof unsubscribeShortcutStatus === 'function') {
+    unsubscribeShortcutStatus();
   }
 
   syncRecordingState(false, 'idle');

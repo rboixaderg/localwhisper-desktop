@@ -32,6 +32,14 @@
         <label>Args extra whisper.cpp</label>
         <input id="extraArgs" type="text" placeholder="-ng, -otxt, etc." />
 
+        <label>Shortcut global iniciar/aturar</label>
+        <div class="row">
+          <input id="shortcut" type="text" placeholder="CommandOrControl+Shift+Space" readonly />
+          <button id="clearShortcut">Desactivar</button>
+        </div>
+        <p class="hint">Fes clic al camp i prem la combinacio de tecles. Cal com a minim un modificador.</p>
+        <span id="shortcutStatus" class="status"></span>
+
         <div class="row">
           <button id="saveConfig">Guardar configuracio</button>
           <span id="configStatus" class="status"></span>
@@ -49,6 +57,15 @@
         </div>
 
         <textarea id="result" rows="12" placeholder="La transcripcio apareixera aqui..."></textarea>
+      </section>
+
+      <section class="panel">
+        <h2>Permisos macOS</h2>
+        <p>Per fer dictat global i enganxar automaticament a altres apps, LocalWhisper necessita permisos d'Accessibilitat.</p>
+        <div class="row">
+          <button id="openAccessibility">Obrir permisos d'Accessibilitat</button>
+          <span class="status">Afegeix LocalWhisper a System Settings &gt; Privacy &amp; Security &gt; Accessibility</span>
+        </div>
       </section>
     </main>
 

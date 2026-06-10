@@ -6,6 +6,7 @@ const OUTPUT_DIR = path.resolve(__dirname, '../src/assets/tray');
 const VIEWBOX_SIZE = 24;
 const BASE_SIZE = 18;
 const RECORDING_FRAMES = [1.0, 0.82, 0.62, 0.82];
+const TRANSCRIBING_OPACITIES = [0.9, 0.55, 0.25, 0.55];
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -122,6 +123,39 @@ function createRaster(size, mode, frameOpacity = 1) {
   return pixels;
 }
 
+function createTranscribingRaster(size, opacity) {
+  const pixels = new Uint8Array(size * size * 4);
+  const scale = VIEWBOX_SIZE / size;
+  const aa = scale * 0.9;
+  const cx = VIEWBOX_SIZE / 2;
+  const cy = VIEWBOX_SIZE / 2;
+  const ringRadius = 6;
+  const ringThickness = 1.6;
+
+  for (let py = 0; py < size; py += 1) {
+    for (let px = 0; px < size; px += 1) {
+      const x = (px + 0.5) * scale;
+      const y = (py + 0.5) * scale;
+
+      const dist = Math.hypot(x - cx, y - cy);
+      const d = Math.abs(dist - ringRadius);
+      let alpha = clamp01((ringThickness * 0.5 - d + aa) / (2 * aa));
+
+      alpha *= opacity;
+
+      if (alpha <= 0) continue;
+
+      const idx = (py * size + px) * 4;
+      pixels[idx] = 0;
+      pixels[idx + 1] = 0;
+      pixels[idx + 2] = 0;
+      pixels[idx + 3] = Math.round(clamp01(alpha) * 255);
+    }
+  }
+
+  return pixels;
+}
+
 function crc32(buffer) {
   let crc = ~0;
   for (let i = 0; i < buffer.length; i += 1) {
@@ -201,6 +235,24 @@ function generate() {
       BASE_SIZE * 2,
       BASE_SIZE * 2,
       rec2x
+    );
+  });
+
+  TRANSCRIBING_OPACITIES.forEach((opacity, index) => {
+    const frame = index + 1;
+    const tr1x = createTranscribingRaster(BASE_SIZE, opacity);
+    const tr2x = createTranscribingRaster(BASE_SIZE * 2, opacity);
+    writePng(
+      path.join(OUTPUT_DIR, `tray-transcribing-${frame}Template.png`),
+      BASE_SIZE,
+      BASE_SIZE,
+      tr1x
+    );
+    writePng(
+      path.join(OUTPUT_DIR, `tray-transcribing-${frame}Template@2x.png`),
+      BASE_SIZE * 2,
+      BASE_SIZE * 2,
+      tr2x
     );
   });
 

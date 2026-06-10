@@ -6,7 +6,8 @@ const DEFAULT_CONFIG = {
   whisperBinPath: '',
   modelPath: '',
   language: 'auto',
-  extraArgs: ''
+  extraArgs: '',
+  shortcut: 'CommandOrControl+Shift+Space'
 };
 
 function getConfigPath() {
@@ -43,7 +44,8 @@ function sanitizeConfig(config, strict = false) {
       typeof merged.whisperBinPath === 'string' ? merged.whisperBinPath.trim() : '',
     modelPath: typeof merged.modelPath === 'string' ? merged.modelPath.trim() : '',
     language: normalizeLanguage(merged.language, strict),
-    extraArgs: typeof merged.extraArgs === 'string' ? merged.extraArgs.trim() : ''
+    extraArgs: typeof merged.extraArgs === 'string' ? merged.extraArgs.trim() : '',
+    shortcut: typeof merged.shortcut === 'string' ? merged.shortcut.trim() : DEFAULT_CONFIG.shortcut
   };
 }
 

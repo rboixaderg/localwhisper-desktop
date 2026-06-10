@@ -1,16 +1,69 @@
 const path = require('node:path');
-const { app, BrowserWindow, ipcMain, dialog, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, systemPreferences, globalShortcut, shell } = require('electron');
 const { loadConfig, saveConfig } = require('./config-store');
 const { transcribeAudio } = require('./stt-service');
+const { pasteTextToActiveApp } = require('./paste-service');
 const trayManager = require('./tray-manager');
 
 let mainWindow = null;
 let rendererReady = false;
 let isRecording = false;
+let recordingPhase = 'idle';
 let quitRequested = false;
+let shortcutStatus = { registered: false, accelerator: '', error: '' };
 
 function getAppState() {
-  return { mainWindow, rendererReady, isRecording };
+  return { mainWindow, rendererReady, isRecording, phase: recordingPhase };
+}
+
+function sendRendererCommand(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed() && rendererReady) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function handleGlobalShortcut() {
+  if (isRecording) {
+    sendRendererCommand('shortcut:command', { command: 'stop', source: 'shortcut' });
+  } else {
+    sendRendererCommand('shortcut:command', { command: 'start', source: 'shortcut' });
+  }
+}
+
+function unregisterGlobalShortcut() {
+  globalShortcut.unregisterAll();
+  shortcutStatus = { registered: false, accelerator: '', error: '' };
+}
+
+function registerGlobalShortcut(accelerator) {
+  unregisterGlobalShortcut();
+
+  if (!accelerator) {
+    return shortcutStatus;
+  }
+
+  try {
+    const ok = globalShortcut.register(accelerator, handleGlobalShortcut);
+
+    if (ok) {
+      shortcutStatus = { registered: true, accelerator, error: '' };
+    } else {
+      shortcutStatus = {
+        registered: false,
+        accelerator,
+        error: 'Shortcut ocupat o invalid. Prova una altra combinacio.'
+      };
+    }
+  } catch (err) {
+    shortcutStatus = {
+      registered: false,
+      accelerator,
+      error: err.message || 'Error registrant el shortcut.'
+    };
+  }
+
+  sendRendererCommand('shortcut:status', shortcutStatus);
+  return shortcutStatus;
 }
 
 function showWindow() {
@@ -102,8 +155,11 @@ app.whenReady().then(async () => {
     }
   }
 
+  const config = await loadConfig();
   createWindow();
   trayManager.create({ stateGetter: getAppState, commandHandler: handleTrayCommand });
+
+  registerGlobalShortcut(config.shortcut);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -116,6 +172,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   quitRequested = true;
+  unregisterGlobalShortcut();
   trayManager.stopAnimation();
 });
 
@@ -147,6 +204,42 @@ ipcMain.handle('renderer:ready', () => {
 
 ipcMain.handle('recording:set-state', (_event, payload) => {
   isRecording = Boolean(payload && payload.isRecording);
+  recordingPhase = (payload && typeof payload.phase === 'string') ? payload.phase : 'idle';
   trayManager.update();
   return true;
+});
+
+ipcMain.handle('shortcut:register', async (_event, accelerator) => {
+  return registerGlobalShortcut(accelerator);
+});
+
+ipcMain.handle('shortcut:get-status', async () => {
+  return shortcutStatus;
+});
+
+ipcMain.handle('text:paste', async (_event, payload) => {
+  if (!payload || typeof payload.text !== 'string') {
+    throw new Error('No text to paste.');
+  }
+
+  return pasteTextToActiveApp(payload.text);
+});
+
+ipcMain.handle('permissions:open-accessibility', async () => {
+  const trusted = systemPreferences.isTrustedAccessibilityClient(true);
+
+  if (!trusted) {
+    shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+    );
+  }
+
+  return { trusted };
+});
+
+ipcMain.handle('permissions:get-status', async () => {
+  return {
+    appName: app.getName(),
+    accessibilityTrusted: systemPreferences.isTrustedAccessibilityClient(false)
+  };
 });

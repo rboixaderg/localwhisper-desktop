@@ -14,13 +14,20 @@ const RECORDING_FRAME_FILES = [
   'tray-recording-3Template.png',
   'tray-recording-4Template.png'
 ];
+const TRANSCRIBING_FRAME_FILES = [
+  'tray-transcribing-1Template.png',
+  'tray-transcribing-2Template.png',
+  'tray-transcribing-3Template.png',
+  'tray-transcribing-4Template.png'
+];
 
 let tray = null;
 let cachedImages = null;
 let animationTimer = null;
 let animationFrame = 0;
+let activePhase = 'idle';
 
-let getState = () => ({ mainWindow: null, rendererReady: false, isRecording: false });
+let getState = () => ({ mainWindow: null, rendererReady: false, isRecording: false, phase: 'idle' });
 let onCommand = () => {};
 
 function loadImage(filePath, asTemplate) {
@@ -36,12 +43,19 @@ function getImages() {
 
   const isMac = process.platform === 'darwin';
   const idle = loadImage(path.join(TRAY_DIR, IDLE_FILE), isMac);
-  const frames = RECORDING_FRAME_FILES
+  const recFrames = RECORDING_FRAME_FILES
+    .map((f) => loadImage(path.join(TRAY_DIR, f), isMac))
+    .filter(Boolean);
+  const trFrames = TRANSCRIBING_FRAME_FILES
     .map((f) => loadImage(path.join(TRAY_DIR, f), isMac))
     .filter(Boolean);
 
-  if (idle && frames.length === RECORDING_FRAME_FILES.length) {
-    cachedImages = { idle, frames };
+  if (idle && recFrames.length === RECORDING_FRAME_FILES.length) {
+    cachedImages = {
+      idle,
+      recFrames,
+      trFrames: trFrames.length === TRANSCRIBING_FRAME_FILES.length ? trFrames : recFrames
+    };
     return cachedImages;
   }
 
@@ -49,13 +63,21 @@ function getImages() {
   if (appIcon) {
     const resized = appIcon.resize({ width: 18, height: 18 });
     if (isMac) resized.setTemplateImage(true);
-    cachedImages = { idle: resized, frames: [resized] };
+    cachedImages = { idle: resized, recFrames: [resized], trFrames: [resized] };
     return cachedImages;
   }
 
   const empty = nativeImage.createEmpty();
-  cachedImages = { idle: empty, frames: [empty] };
+  cachedImages = { idle: empty, recFrames: [empty], trFrames: [empty] };
   return cachedImages;
+}
+
+function animFramesForPhase(phase) {
+  const { recFrames, trFrames } = getImages();
+  if (phase === 'transcribing' || phase === 'pasting' || phase === 'processing') {
+    return trFrames;
+  }
+  return recFrames;
 }
 
 function setTrayImage(img) {
@@ -69,47 +91,83 @@ function stopAnimation() {
   clearInterval(animationTimer);
   animationTimer = null;
   animationFrame = 0;
+  activePhase = 'idle';
 }
 
-function startAnimation() {
-  if (animationTimer) return;
+function startAnimation(phase) {
+  const frames = animFramesForPhase(phase);
+  const needsRestart = animationTimer && activePhase !== phase;
 
-  const { frames } = getImages();
-  animationFrame = 0;
-  setTrayImage(frames[0]);
+  if (!animationTimer || needsRestart) {
+    if (animationTimer) {
+      clearInterval(animationTimer);
+      animationTimer = null;
+    }
+    animationFrame = 0;
+    activePhase = phase;
+    setTrayImage(frames[0]);
 
-  animationTimer = setInterval(() => {
-    if (!tray || !getState().isRecording) return;
-    animationFrame = (animationFrame + 1) % frames.length;
-    setTrayImage(frames[animationFrame]);
-  }, ANIMATION_INTERVAL_MS);
+    animationTimer = setInterval(() => {
+      if (!tray) return;
+      const currentFrames = animFramesForPhase(activePhase);
+      animationFrame = (animationFrame + 1) % currentFrames.length;
+      setTrayImage(currentFrames[animationFrame]);
+    }, ANIMATION_INTERVAL_MS);
+  }
 }
 
 function update() {
   if (!tray) return;
 
   const { idle } = getImages();
-  const { mainWindow, rendererReady, isRecording } = getState();
+  const { mainWindow, rendererReady, isRecording, phase } = getState();
 
   const canControl = Boolean(mainWindow && !mainWindow.isDestroyed() && rendererReady);
   const windowVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
 
-  if (isRecording) {
-    startAnimation();
+  const active = isRecording || phase === 'processing' || phase === 'transcribing' || phase === 'pasting';
+
+  if (active) {
+    startAnimation(isRecording ? 'recording' : (phase || 'transcribing'));
   } else {
     stopAnimation();
     setTrayImage(idle);
   }
 
-  tray.setToolTip(isRecording ? 'LocalWhisper (gravant)' : 'LocalWhisper');
+  let tooltip = 'LocalWhisper';
+  if (isRecording) {
+    tooltip = 'LocalWhisper (gravant)';
+  } else if (phase === 'processing') {
+    tooltip = 'LocalWhisper (processant)';
+  } else if (phase === 'transcribing') {
+    tooltip = 'LocalWhisper (transcrivint)';
+  } else if (phase === 'pasting') {
+    tooltip = 'LocalWhisper (enganxant)';
+  }
+
+  tray.setToolTip(tooltip);
   if (process.platform === 'darwin') tray.setTitle('');
+
+  let startStopLabel;
+  if (isRecording) {
+    startStopLabel = 'Aturar i transcriure';
+  } else if (phase === 'processing' || phase === 'transcribing' || phase === 'pasting') {
+    startStopLabel = 'Transcrivint...';
+  } else {
+    startStopLabel = 'Iniciar gravacio';
+  }
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
-        label: isRecording ? 'Aturar i transcriure' : 'Iniciar gravacio',
-        enabled: canControl,
-        click: () => onCommand(isRecording ? 'stop' : 'start')
+        label: startStopLabel,
+        enabled: canControl && isRecording,
+        click: () => onCommand('stop')
+      },
+      {
+        label: 'Iniciar gravacio',
+        enabled: canControl && !active,
+        click: () => onCommand('start')
       },
       {
         label: windowVisible ? 'Amagar finestra' : 'Mostrar finestra',

@@ -87,6 +87,27 @@ button:disabled {
   font-size: 14px;
 }
 
+.hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #5e6e66;
+}
+
+#shortcutStatus {
+  display: block;
+  margin-top: 4px;
+}
+
+#shortcut {
+  cursor: pointer;
+  font-family: monospace;
+}
+
+#shortcut:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 textarea {
   margin-top: 10px;
   min-height: 220px;

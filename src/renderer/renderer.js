@@ -150,7 +150,7 @@ async function updateShortcutFeedbackFromMain() {
       if (status.error) {
         setShortcutStatus(status.error, true);
       } else if (!status.accelerator) {
-        setShortcutStatus('Shortcut desactivat.');
+        setShortcutStatus('Shortcut disabled.');
       }
     } else {
       setShortcutStatus('');
@@ -163,12 +163,12 @@ async function saveConfig() {
     const config = getConfigFromUi();
     const savedConfig = await window.localWhisperApi.saveConfig(config);
     setConfigToUi(savedConfig);
-    setConfigStatus('Configuracio guardada.');
+    setConfigStatus('Configuration saved.');
 
     await window.localWhisperApi.registerShortcut(savedConfig.shortcut);
     updateShortcutFeedbackFromMain();
   } catch (error) {
-    setConfigStatus(error.message || 'Error guardant configuracio.', true);
+    setConfigStatus(error.message || 'Error saving configuration.', true);
   }
 }
 
@@ -226,28 +226,28 @@ function handleShortcutKeydown(event) {
 
 function handleClearShortcut() {
   el.shortcut.value = '';
-  setShortcutStatus('Shortcut desactivat. Guarda la configuracio per aplicar.');
+  setShortcutStatus('Shortcut disabled. Save configuration to apply.');
 }
 
 async function openAccessibilityPermissions() {
   try {
     const result = await window.localWhisperApi.openAccessibilityPermissions();
     if (result && result.trusted) {
-      setRecStatus('Permisos d\'Accessibilitat concedits correctament.');
+      setRecStatus('Accessibility permissions granted.');
     } else {
       setRecStatus(
-        'Afegeix ' + state.appName + ' a System Settings > Privacy & Security > Accessibility.',
+        'Add ' + state.appName + ' in System Settings > Privacy & Security > Accessibility.',
         true
       );
     }
   } catch (error) {
-    setRecStatus('No s\'ha pogut obrir permisos: ' + (error.message || ''), true);
+    setRecStatus('Failed to open permissions: ' + (error.message || ''), true);
   }
 }
 
 async function startRecording(source = 'manual') {
   if (state.isTranscribing) {
-    setRecStatus('Espera que acabi la transcripcio actual.', true);
+    setRecStatus('Wait for the current transcription to finish.', true);
     return;
   }
 
@@ -280,12 +280,12 @@ async function startRecording(source = 'manual') {
 
     el.startRec.disabled = true;
     el.stopRec.disabled = false;
-    setRecStatus('Gravant...');
+    setRecStatus('Recording...');
     syncRecordingState(true, 'recording');
   } catch (error) {
     releaseRecordingResources();
     syncRecordingState(false, 'idle');
-    setRecStatus(error.message || 'No s\'ha pogut iniciar la gravacio.', true);
+    setRecStatus(error.message || 'Could not start recording.', true);
   }
 }
 
@@ -298,7 +298,7 @@ async function stopRecordingAndTranscribe() {
     syncRecordingState(false, 'idle');
     el.startRec.disabled = false;
     el.stopRec.disabled = true;
-    setRecStatus('No hi ha cap gravacio activa.', true);
+    setRecStatus('No active recording.', true);
     return;
   }
 
@@ -308,7 +308,7 @@ async function stopRecordingAndTranscribe() {
   try {
     el.stopRec.disabled = true;
     el.startRec.disabled = true;
-    setRecStatus('Processant audio...');
+    setRecStatus('Processing audio...');
 
     state.processorNode.disconnect();
     state.sourceNode.disconnect();
@@ -321,7 +321,7 @@ async function stopRecordingAndTranscribe() {
     syncRecordingState(false, 'processing');
 
     if (state.totalLength === 0 || state.chunks.length === 0) {
-      setRecStatus('No s\'ha capturat audio. Verifica els permisos del microfon.', true);
+      setRecStatus('No audio captured. Check microphone permissions.', true);
       return;
     }
 
@@ -334,7 +334,7 @@ async function stopRecordingAndTranscribe() {
     }
     if (peak < 0.001) {
       setRecStatus(
-        'Audio silencio\u0301s. El micro\u0300fon pot estar silenciat o sense permisos.',
+        'Silent audio. The microphone may be muted or without permissions.',
         true
       );
       return;
@@ -344,39 +344,39 @@ async function stopRecordingAndTranscribe() {
     const wavBuffer = window.audioUtils.encodeWavFromFloat32(downsampled, 16000);
     const audioBase64 = window.audioUtils.arrayBufferToBase64(wavBuffer);
 
-    setRecStatus('Transcrivint...');
+    setRecStatus('Transcribing...');
     syncRecordingState(false, 'transcribing');
     const text = await window.localWhisperApi.transcribe(audioBase64);
-    el.result.value = text || '[Sense sortida textual]';
+    el.result.value = text || '[No text output]';
 
     if (source === 'shortcut' && text) {
       try {
-        setRecStatus('Enganxant text...');
+        setRecStatus('Pasting text...');
         syncRecordingState(false, 'pasting');
         await window.localWhisperApi.pasteText(text);
-        setRecStatus('Completat i enganxat');
+        setRecStatus('Completed and pasted');
       } catch (pasteError) {
         const isAccessibility =
           /System Events|access|permission|not allowed/i.test(pasteError.message || '');
         if (isAccessibility) {
           setRecStatus(
-            'Completat, pero no s\'ha pogut enganxar. Concedeix permisos d\'Accessibilitat a ' +
+            'Completed, but paste failed. Grant Accessibility permissions to ' +
               state.appName +
               '.',
             true
           );
         } else {
           setRecStatus(
-            'Completat, pero no s\'ha pogut enganxar. El text es al porta-retalls.',
+            'Completed, but paste failed. The text is in the clipboard.',
             true
           );
         }
       }
     } else {
-      setRecStatus('Completat');
+      setRecStatus('Completed');
     }
   } catch (error) {
-    setRecStatus(error.message || 'Error de transcripcio.', true);
+    setRecStatus(error.message || 'Transcription error.', true);
   } finally {
     state.isTranscribing = false;
     releaseRecordingResources();
@@ -422,7 +422,7 @@ function handleShortcutStatus(payload) {
     if (payload.error) {
       setShortcutStatus(payload.error, true);
     } else if (!payload.accelerator) {
-      setShortcutStatus('Shortcut desactivat.');
+      setShortcutStatus('Shortcut disabled.');
     }
   } else {
     setShortcutStatus('');
@@ -448,7 +448,7 @@ const unsubscribeShortcut = window.localWhisperApi.onShortcutCommand(handleShort
 const unsubscribeShortcutStatus = window.localWhisperApi.onShortcutStatus(handleShortcutStatus);
 
 loadInitialConfig().catch((error) => {
-  setConfigStatus(error.message || 'No s\'ha pogut carregar configuracio.', true);
+  setConfigStatus(error.message || 'Could not load configuration.', true);
 });
 loadPermissionsStatus();
 notifyRendererReady();

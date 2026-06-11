@@ -1,70 +1,71 @@
 <!doctype html>
-<html lang="ca">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self'" />
     <title>LocalWhisper</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app">
       <h1>LocalWhisper</h1>
-      <p class="subtitle">Speech-to-text local amb models custom de whisper.cpp</p>
+      <p class="subtitle">Local speech-to-text with custom whisper.cpp models</p>
 
       <section class="panel">
-        <h2>Configuracio</h2>
+        <h2>Configuration</h2>
 
-        <label>Ruta binari whisper.cpp (main o cli)</label>
+        <label>Whisper binary path (main or cli)</label>
         <div class="row">
           <input id="whisperBinPath" type="text" placeholder="/path/to/whisper-cli" />
-          <button id="pickBin">Seleccionar</button>
+          <button id="pickBin">Browse</button>
         </div>
 
-        <label>Ruta model (.bin, .gguf segons build)</label>
+        <label>Model path (.bin, .gguf depending on build)</label>
         <div class="row">
           <input id="modelPath" type="text" placeholder="/path/to/model.bin" />
-          <button id="pickModel">Seleccionar</button>
+          <button id="pickModel">Browse</button>
         </div>
 
-        <label>Llengua (auto, ca, es, en...)</label>
+        <label>Language (auto, en, es, ca...)</label>
         <input id="language" type="text" placeholder="auto" />
 
-        <label>Args extra whisper.cpp</label>
+        <label>Extra whisper.cpp args</label>
         <input id="extraArgs" type="text" placeholder="-ng, -otxt, etc." />
 
-        <label>Shortcut global iniciar/aturar</label>
+        <label>Global shortcut start/stop</label>
         <div class="row">
           <input id="shortcut" type="text" placeholder="CommandOrControl+Shift+Space" readonly />
-          <button id="clearShortcut">Desactivar</button>
+          <button id="clearShortcut">Disable</button>
         </div>
-        <p class="hint">Fes clic al camp i prem la combinacio de tecles. Cal com a minim un modificador.</p>
+        <p class="hint">Click the field and press a key combination. At least one modifier is required.</p>
         <span id="shortcutStatus" class="status"></span>
 
         <div class="row">
-          <button id="saveConfig">Guardar configuracio</button>
+          <button id="saveConfig">Save Configuration</button>
           <span id="configStatus" class="status"></span>
         </div>
       </section>
 
       <section class="panel">
-        <h2>Transcripcio</h2>
-        <p>Manten local: prem "Iniciar", parla, i prem "Aturar i transcriure".</p>
+        <h2>Transcription</h2>
+        <p>Fully local: click "Start", speak, then click "Stop &amp; Transcribe".</p>
 
         <div class="row">
-          <button id="startRec">Iniciar gravacio</button>
-          <button id="stopRec" disabled>Aturar i transcriure</button>
-          <span id="recStatus" class="status">Aturat</span>
+          <button id="startRec">Start Recording</button>
+          <button id="stopRec" disabled>Stop &amp; Transcribe</button>
+          <span id="recStatus" class="status">Stopped</span>
         </div>
 
-        <textarea id="result" rows="12" placeholder="La transcripcio apareixera aqui..."></textarea>
+        <textarea id="result" rows="12" placeholder="Transcription will appear here..."></textarea>
       </section>
 
       <section class="panel">
-        <h2>Permisos macOS</h2>
-        <p>Per fer dictat global i enganxar automaticament a altres apps, LocalWhisper necessita permisos d'Accessibilitat.</p>
+        <h2>macOS Permissions</h2>
+        <p>For system-wide dictation and automatic paste into other apps, LocalWhisper needs Accessibility permissions.</p>
         <div class="row">
-          <button id="openAccessibility">Obrir permisos d'Accessibilitat</button>
-          <span class="status">Afegeix LocalWhisper a System Settings &gt; Privacy &amp; Security &gt; Accessibility</span>
+          <button id="openAccessibility">Open Accessibility Permissions</button>
+          <span class="status">Add LocalWhisper in System Settings &gt; Privacy &amp; Security &gt; Accessibility</span>
         </div>
       </section>
     </main>

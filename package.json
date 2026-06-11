@@ -3,6 +3,28 @@
   "version": "1.0.0",
   "description": "Local desktop speech-to-text app with custom Whisper models",
   "main": "src/main/main.js",
+  "author": "Roger Boixader Güell <rboixaderg@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/localwhisper/localwhisper-desktop"
+  },
+  "bugs": {
+    "url": "https://github.com/localwhisper/localwhisper-desktop/issues"
+  },
+  "homepage": "https://github.com/localwhisper/localwhisper-desktop#readme",
+  "keywords": [
+    "whisper",
+    "speech-to-text",
+    "stt",
+    "electron",
+    "desktop",
+    "offline",
+    "privacy",
+    "voice",
+    "transcription",
+    "dictation"
+  ],
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
@@ -11,8 +33,6 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
-  "author": "",
-  "license": "MIT",
   "devDependencies": {
     "electron": "^37.4.0",
     "electron-builder": "^26.0.12"
@@ -34,7 +54,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "LocalWhisper necessita accés al micròfon per enregistrar i transcriure veu."
+        "NSMicrophoneUsageDescription": "LocalWhisper needs microphone access to record and transcribe speech."
       }
     },
     "win": {

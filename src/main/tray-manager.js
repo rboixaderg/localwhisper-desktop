@@ -136,13 +136,13 @@ function update() {
 
   let tooltip = 'LocalWhisper';
   if (isRecording) {
-    tooltip = 'LocalWhisper (gravant)';
+    tooltip = 'LocalWhisper (recording)';
   } else if (phase === 'processing') {
-    tooltip = 'LocalWhisper (processant)';
+    tooltip = 'LocalWhisper (processing)';
   } else if (phase === 'transcribing') {
-    tooltip = 'LocalWhisper (transcrivint)';
+    tooltip = 'LocalWhisper (transcribing)';
   } else if (phase === 'pasting') {
-    tooltip = 'LocalWhisper (enganxant)';
+    tooltip = 'LocalWhisper (pasting)';
   }
 
   tray.setToolTip(tooltip);
@@ -150,11 +150,11 @@ function update() {
 
   let startStopLabel;
   if (isRecording) {
-    startStopLabel = 'Aturar i transcriure';
+    startStopLabel = 'Stop & Transcribe';
   } else if (phase === 'processing' || phase === 'transcribing' || phase === 'pasting') {
-    startStopLabel = 'Transcrivint...';
+    startStopLabel = 'Transcribing...';
   } else {
-    startStopLabel = 'Iniciar gravacio';
+    startStopLabel = 'Start Recording';
   }
 
   tray.setContextMenu(
@@ -165,17 +165,17 @@ function update() {
         click: () => onCommand('stop')
       },
       {
-        label: 'Iniciar gravacio',
+        label: 'Start Recording',
         enabled: canControl && !active,
         click: () => onCommand('start')
       },
       {
-        label: windowVisible ? 'Amagar finestra' : 'Mostrar finestra',
+        label: windowVisible ? 'Hide Window' : 'Show Window',
         click: () => onCommand('toggle-window')
       },
       { type: 'separator' },
       {
-        label: 'Sortir',
+        label: 'Quit',
         click: () => onCommand('quit')
       }
     ])

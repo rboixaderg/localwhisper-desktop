@@ -52,14 +52,14 @@ function registerGlobalShortcut(accelerator) {
       shortcutStatus = {
         registered: false,
         accelerator,
-        error: 'Shortcut ocupat o invalid. Prova una altra combinacio.'
+        error: 'Shortcut is taken or invalid. Try a different combination.'
       };
     }
   } catch (err) {
     shortcutStatus = {
       registered: false,
       accelerator,
-      error: err.message || 'Error registrant el shortcut.'
+      error: err.message || 'Error registering shortcut.'
     };
   }
 
@@ -102,6 +102,16 @@ function createWindow() {
 
   mainWindow.on('show', () => trayManager.update());
   mainWindow.on('hide', () => trayManager.update());
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    if (isRecording || recordingPhase !== 'idle') {
+      isRecording = false;
+      recordingPhase = 'idle';
+      overlayWindow.hide();
+      trayManager.update();
+    }
+  });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 }

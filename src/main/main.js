@@ -4,6 +4,7 @@ const { loadConfig, saveConfig } = require('./config-store');
 const { transcribeAudio } = require('./stt-service');
 const { pasteTextToActiveApp } = require('./paste-service');
 const trayManager = require('./tray-manager');
+const overlayWindow = require('./overlay-window');
 
 let mainWindow = null;
 let rendererReady = false;
@@ -157,6 +158,7 @@ app.whenReady().then(async () => {
 
   const config = await loadConfig();
   createWindow();
+  overlayWindow.create();
   trayManager.create({ stateGetter: getAppState, commandHandler: handleTrayCommand });
 
   registerGlobalShortcut(config.shortcut);
@@ -173,6 +175,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   quitRequested = true;
   unregisterGlobalShortcut();
+  overlayWindow.destroy();
   trayManager.stopAnimation();
 });
 
@@ -205,6 +208,13 @@ ipcMain.handle('renderer:ready', () => {
 ipcMain.handle('recording:set-state', (_event, payload) => {
   isRecording = Boolean(payload && payload.isRecording);
   recordingPhase = (payload && typeof payload.phase === 'string') ? payload.phase : 'idle';
+
+  if (recordingPhase === 'recording' || recordingPhase === 'processing' || recordingPhase === 'transcribing' || recordingPhase === 'pasting') {
+    overlayWindow.showPhase(recordingPhase);
+  } else {
+    overlayWindow.hide();
+  }
+
   trayManager.update();
   return true;
 });

@@ -1,4 +1,31 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+*.blockmap
+
+# Installers / packaged artifacts
+*.dmg
+*.AppImage
+*.deb
+*.exe
+
+# Local config & secrets
+.env
+.env.*
+config.json
+
+# Whisper models
+*.bin
+*.gguf
+
+# Audio files
+*.wav
+*.mp3
+*.m4a
+
+# OS / logs
 .DS_Store
 *.log

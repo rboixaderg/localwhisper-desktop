@@ -152,6 +152,40 @@ npm run dist
 
 Generates a `.dmg` in `dist/` for macOS. Linux builds produce `.AppImage`/`.deb`, Windows builds produce `.exe` (NSIS).
 
+### Building from source (no certificate required)
+
+You do **not** need any Apple Developer certificate to build and run LocalWhisper
+yourself. Building locally is fully supported out of the box:
+
+```bash
+npm install
+npm run dist        # produces dist/LocalWhisper-<version>.dmg
+```
+
+`electron-builder` uses ad-hoc signing when no Developer ID is configured, so the
+`.dmg` is created and the app runs on the machine that built it without any
+warnings.
+
+A certificate (Apple Developer ID + notarization) is **only** needed if you want
+to *distribute* the build to other people without macOS showing a security
+prompt. See [Release build notes](#release-build-notes) below.
+
+#### Opening a downloaded (unsigned) build on macOS
+
+If you download a `.dmg` that was **not** notarized (e.g. a community build),
+macOS Gatekeeper will block it on first launch because of the quarantine
+attribute. Two ways to open it:
+
+- **System Settings → Privacy & Security → Open Anyway**, or
+- remove the quarantine flag from a terminal:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/LocalWhisper.app
+  ```
+
+This is expected for any unsigned macOS app and does not affect builds you
+compiled yourself.
+
 ### Release build notes
 
 **macOS:**

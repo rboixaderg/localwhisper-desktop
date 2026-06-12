@@ -56,6 +56,7 @@ function create() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       preload: path.join(__dirname, 'preload-overlay.js')
     }
   });

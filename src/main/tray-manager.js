@@ -149,25 +149,31 @@ function update() {
   if (process.platform === 'darwin') tray.setTitle('');
 
   let startStopLabel;
+  let startStopEnabled;
+  let startStopCommand;
+
   if (isRecording) {
     startStopLabel = 'Stop & Transcribe';
+    startStopEnabled = canControl;
+    startStopCommand = 'stop';
   } else if (phase === 'processing' || phase === 'transcribing' || phase === 'pasting') {
     startStopLabel = 'Transcribing...';
+    startStopEnabled = false;
+    startStopCommand = '';
   } else {
     startStopLabel = 'Start Recording';
+    startStopEnabled = canControl;
+    startStopCommand = 'start';
   }
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
         label: startStopLabel,
-        enabled: canControl && isRecording,
-        click: () => onCommand('stop')
-      },
-      {
-        label: 'Start Recording',
-        enabled: canControl && !active,
-        click: () => onCommand('start')
+        enabled: startStopEnabled,
+        click: () => {
+          if (startStopCommand) onCommand(startStopCommand);
+        }
       },
       {
         label: windowVisible ? 'Hide Window' : 'Show Window',

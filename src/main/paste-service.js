@@ -51,20 +51,16 @@ async function pasteTextToActiveApp(text) {
     throw new Error('No text to paste.');
   }
 
-  const previousClipboard = clipboard.readText();
+  if (process.platform !== 'darwin') {
+    throw new Error('Automatic paste is only supported on macOS. The transcribed text is in the clipboard for manual paste.');
+  }
 
   clipboard.writeText(trimmed);
 
   const script =
     'tell application "System Events" to keystroke "v" using command down';
 
-  try {
-    await runAppleScript(script);
-  } finally {
-    setTimeout(() => {
-      clipboard.writeText(previousClipboard || '');
-    }, 400);
-  }
+  await runAppleScript(script);
 
   return { success: true };
 }

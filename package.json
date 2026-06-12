@@ -7,12 +7,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/localwhisper/localwhisper-desktop"
+    "url": "https://github.com/rboixaderg/localwhisper-desktop"
   },
   "bugs": {
-    "url": "https://github.com/localwhisper/localwhisper-desktop/issues"
+    "url": "https://github.com/rboixaderg/localwhisper-desktop/issues"
   },
-  "homepage": "https://github.com/localwhisper/localwhisper-desktop#readme",
+  "homepage": "https://github.com/rboixaderg/localwhisper-desktop#readme",
   "keywords": [
     "whisper",
     "speech-to-text",
@@ -28,13 +28,14 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "check": "node --check src/main/*.js src/renderer/*.js src/shared/*.js scripts/*.js",
+    "check": "node --check src/main/*.js src/renderer/*.js src/shared/*.js scripts/*.js test/*.js",
+    "test": "node --test test/*.test.js",
     "generate:tray-icons": "node scripts/generate-tray-icons.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^37.4.0",
+    "electron": "^42.4.0",
     "electron-builder": "^26.0.12"
   },
   "build": {

@@ -90,10 +90,18 @@
     return btoa(binary);
   }
 
-  window.audioUtils = {
+  const audioUtils = {
     mergeFloat32,
     downsampleBuffer,
     encodeWavFromFloat32,
     arrayBufferToBase64
   };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = audioUtils;
+  }
+
+  if (typeof window !== 'undefined') {
+    window.audioUtils = audioUtils;
+  }
 })();

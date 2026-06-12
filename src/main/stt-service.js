@@ -3,6 +3,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
+const MAX_AUDIO_BASE64_LENGTH = 25 * 1024 * 1024;
+
 async function fileExists(filePath) {
   try {
     await fs.access(filePath);
@@ -14,7 +16,40 @@ async function fileExists(filePath) {
 
 function parseExtraArgs(raw) {
   if (!raw || typeof raw !== 'string') return [];
-  return raw.split(/\s+/).filter(Boolean);
+
+  const args = [];
+  let current = '';
+  let inQuote = false;
+  let quoteChar = '';
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (inQuote) {
+      if (ch === quoteChar) {
+        inQuote = false;
+        quoteChar = '';
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true;
+      quoteChar = ch;
+    } else if (ch === ' ' || ch === '\t') {
+      if (current) {
+        args.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current) {
+    args.push(current);
+  }
+
+  return args;
 }
 
 function truncateStderr(stderr, maxLen = 700) {
@@ -74,6 +109,14 @@ async function findOutputTextInDir(dir) {
 
 async function transcribeAudio({ audioBase64, config }) {
   const { whisperBinPath, modelPath, language, extraArgs } = config;
+
+  if (!audioBase64 || typeof audioBase64 !== 'string') {
+    throw new Error('No audio data provided.');
+  }
+
+  if (audioBase64.length > MAX_AUDIO_BASE64_LENGTH) {
+    throw new Error('Audio data too large. Maximum recording duration is 5 minutes.');
+  }
 
   if (!whisperBinPath || !(await fileExists(whisperBinPath))) {
     throw new Error('Whisper binary path is invalid.');
@@ -141,4 +184,4 @@ async function transcribeAudio({ audioBase64, config }) {
   }
 }
 
-module.exports = { transcribeAudio };
+module.exports = { transcribeAudio, parseExtraArgs, truncateStderr, isGpuCrash };

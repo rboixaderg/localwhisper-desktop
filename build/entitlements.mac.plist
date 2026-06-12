@@ -2,12 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Required by Electron for JavaScript JIT compilation (V8 engine) -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
+    <!-- Required by Electron for V8's WebAssembly and code-caching memory regions -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
+    <!-- Required to load unsigned external binaries (e.g. locally built whisper.cpp) -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
+    <!-- Required for microphone audio capture -->
     <key>com.apple.security.device.audio-input</key>
     <true/>
 </dict>

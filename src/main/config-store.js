@@ -10,8 +10,37 @@ const DEFAULT_CONFIG = {
   shortcut: 'CommandOrControl+Shift+Space'
 };
 
+const MAX_PATH_LENGTH = 4096;
+const MAX_ARGS_LENGTH = 2048;
+const MAX_ACCELERATOR_LENGTH = 100;
+
 function getConfigPath() {
   return path.join(app.getPath('userData'), 'config.json');
+}
+
+function sanitizeConfig(config, strict = false) {
+  const merged = { ...DEFAULT_CONFIG, ...config };
+
+  const whisperBinPath = typeof merged.whisperBinPath === 'string'
+    ? merged.whisperBinPath.trim().slice(0, MAX_PATH_LENGTH)
+    : '';
+  const modelPath = typeof merged.modelPath === 'string'
+    ? merged.modelPath.trim().slice(0, MAX_PATH_LENGTH)
+    : '';
+  const extraArgs = typeof merged.extraArgs === 'string'
+    ? merged.extraArgs.trim().slice(0, MAX_ARGS_LENGTH)
+    : '';
+  const shortcut = typeof merged.shortcut === 'string'
+    ? merged.shortcut.trim().slice(0, MAX_ACCELERATOR_LENGTH)
+    : DEFAULT_CONFIG.shortcut;
+
+  return {
+    whisperBinPath,
+    modelPath,
+    language: normalizeLanguage(merged.language, strict),
+    extraArgs,
+    shortcut
+  };
 }
 
 function normalizeLanguage(language, strict = false) {
@@ -37,18 +66,6 @@ function normalizeLanguage(language, strict = false) {
   return 'auto';
 }
 
-function sanitizeConfig(config, strict = false) {
-  const merged = { ...DEFAULT_CONFIG, ...config };
-  return {
-    whisperBinPath:
-      typeof merged.whisperBinPath === 'string' ? merged.whisperBinPath.trim() : '',
-    modelPath: typeof merged.modelPath === 'string' ? merged.modelPath.trim() : '',
-    language: normalizeLanguage(merged.language, strict),
-    extraArgs: typeof merged.extraArgs === 'string' ? merged.extraArgs.trim() : '',
-    shortcut: typeof merged.shortcut === 'string' ? merged.shortcut.trim() : DEFAULT_CONFIG.shortcut
-  };
-}
-
 async function loadConfig() {
   const configPath = getConfigPath();
 
@@ -72,5 +89,7 @@ async function saveConfig(config) {
 module.exports = {
   loadConfig,
   saveConfig,
+  sanitizeConfig,
+  normalizeLanguage,
   DEFAULT_CONFIG
 };

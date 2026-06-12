@@ -6,12 +6,24 @@ const { pasteTextToActiveApp } = require('./paste-service');
 const trayManager = require('./tray-manager');
 const overlayWindow = require('./overlay-window');
 
+const ALLOWED_ORIGIN = 'file://';
+const MAX_AUDIO_BASE64_LENGTH = 25 * 1024 * 1024;
+const MAX_ACCELERATOR_LENGTH = 100;
+
 let mainWindow = null;
 let rendererReady = false;
 let isRecording = false;
 let recordingPhase = 'idle';
 let quitRequested = false;
 let shortcutStatus = { registered: false, accelerator: '', error: '' };
+
+function validateSender(event) {
+  if (!event.senderFrame) return;
+  const url = event.senderFrame.url || '';
+  if (!url.startsWith(ALLOWED_ORIGIN)) {
+    throw new Error('IPC calls are only allowed from the application window.');
+  }
+}
 
 function getAppState() {
   return { mainWindow, rendererReady, isRecording, phase: recordingPhase };
@@ -32,7 +44,9 @@ function handleGlobalShortcut() {
 }
 
 function unregisterGlobalShortcut() {
-  globalShortcut.unregisterAll();
+  if (shortcutStatus.accelerator) {
+    globalShortcut.unregister(shortcutStatus.accelerator);
+  }
   shortcutStatus = { registered: false, accelerator: '', error: '' };
 }
 
@@ -40,6 +54,16 @@ function registerGlobalShortcut(accelerator) {
   unregisterGlobalShortcut();
 
   if (!accelerator) {
+    return shortcutStatus;
+  }
+
+  if (typeof accelerator !== 'string' || accelerator.length > MAX_ACCELERATOR_LENGTH) {
+    shortcutStatus = {
+      registered: false,
+      accelerator: String(accelerator || ''),
+      error: 'Invalid shortcut format.'
+    };
+    sendRendererCommand('shortcut:status', shortcutStatus);
     return shortcutStatus;
   }
 
@@ -88,7 +112,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     }
   });
 
@@ -195,29 +219,56 @@ app.on('window-all-closed', () => {
 
 // --- IPC handlers ---
 
-ipcMain.handle('config:load', () => loadConfig());
-
-ipcMain.handle('config:save', (_event, config) => saveConfig(config));
-
-ipcMain.handle('file:pick', async (_event, options) => {
-  const result = await dialog.showOpenDialog(mainWindow, options);
-  return result.canceled || result.filePaths.length === 0 ? '' : result.filePaths[0];
+ipcMain.handle('config:load', (event) => {
+  validateSender(event);
+  return loadConfig();
 });
 
-ipcMain.handle('stt:transcribe', async (_event, payload) => {
+ipcMain.handle('config:save', (event, config) => {
+  validateSender(event);
+  if (config && typeof config !== 'object') {
+    throw new Error('Invalid configuration payload.');
+  }
+  return saveConfig(config);
+});
+
+ipcMain.handle('file:pick', (event, options) => {
+  validateSender(event);
+  if (options && typeof options !== 'object') {
+    throw new Error('Invalid file picker options.');
+  }
+  return dialog.showOpenDialog(mainWindow, options || {}).then((result) => {
+    return result.canceled || result.filePaths.length === 0 ? '' : result.filePaths[0];
+  });
+});
+
+ipcMain.handle('stt:transcribe', async (event, payload) => {
+  validateSender(event);
+  if (!payload || typeof payload.audioBase64 !== 'string') {
+    throw new Error('Invalid transcription payload.');
+  }
+  if (payload.audioBase64.length > MAX_AUDIO_BASE64_LENGTH) {
+    throw new Error('Audio data too large. Maximum recording duration is 5 minutes.');
+  }
   const config = await loadConfig();
   return transcribeAudio({ audioBase64: payload.audioBase64, config });
 });
 
-ipcMain.handle('renderer:ready', () => {
+ipcMain.handle('renderer:ready', (event) => {
+  validateSender(event);
   rendererReady = true;
   trayManager.update();
   return true;
 });
 
-ipcMain.handle('recording:set-state', (_event, payload) => {
+ipcMain.handle('recording:set-state', (event, payload) => {
+  validateSender(event);
+  const validPhases = ['idle', 'recording', 'processing', 'transcribing', 'pasting'];
+
   isRecording = Boolean(payload && payload.isRecording);
-  recordingPhase = (payload && typeof payload.phase === 'string') ? payload.phase : 'idle';
+  recordingPhase = (payload && typeof payload.phase === 'string' && validPhases.includes(payload.phase))
+    ? payload.phase
+    : 'idle';
 
   if (recordingPhase === 'recording' || recordingPhase === 'processing' || recordingPhase === 'transcribing' || recordingPhase === 'pasting') {
     overlayWindow.showPhase(recordingPhase);
@@ -229,23 +280,30 @@ ipcMain.handle('recording:set-state', (_event, payload) => {
   return true;
 });
 
-ipcMain.handle('shortcut:register', async (_event, accelerator) => {
+ipcMain.handle('shortcut:register', (event, accelerator) => {
+  validateSender(event);
   return registerGlobalShortcut(accelerator);
 });
 
-ipcMain.handle('shortcut:get-status', async () => {
+ipcMain.handle('shortcut:get-status', (event) => {
+  validateSender(event);
   return shortcutStatus;
 });
 
-ipcMain.handle('text:paste', async (_event, payload) => {
+ipcMain.handle('text:paste', async (event, payload) => {
+  validateSender(event);
   if (!payload || typeof payload.text !== 'string') {
     throw new Error('No text to paste.');
+  }
+  if (payload.text.length > 500000) {
+    throw new Error('Text too long to paste.');
   }
 
   return pasteTextToActiveApp(payload.text);
 });
 
-ipcMain.handle('permissions:open-accessibility', async () => {
+ipcMain.handle('permissions:open-accessibility', async (event) => {
+  validateSender(event);
   const trusted = systemPreferences.isTrustedAccessibilityClient(true);
 
   if (!trusted) {
@@ -257,7 +315,8 @@ ipcMain.handle('permissions:open-accessibility', async () => {
   return { trusted };
 });
 
-ipcMain.handle('permissions:get-status', async () => {
+ipcMain.handle('permissions:get-status', async (event) => {
+  validateSender(event);
   return {
     appName: app.getName(),
     accessibilityTrusted: systemPreferences.isTrustedAccessibilityClient(false)

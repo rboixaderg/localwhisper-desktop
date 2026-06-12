@@ -20,6 +20,58 @@ Cross-platform desktop application (Electron) for 100% local speech-to-text usin
 - A compatible model (`.bin`, `.gguf`, or whatever format your binary accepts)
 - macOS: Microphone and Accessibility permissions
 
+## Getting whisper.cpp and a model
+
+LocalWhisper does **not** bundle the transcription engine. You provide your own
+`whisper.cpp` build and model. Both are free and open source.
+
+### 1. Build the `whisper.cpp` binary
+
+```bash
+git clone https://github.com/ggml-org/whisper.cpp.git
+cd whisper.cpp
+cmake -B build
+cmake --build build -j --config Release
+```
+
+This produces the CLI binary at `build/bin/whisper-cli` (older versions name it
+`main`). That is the path you set in **Whisper binary path** in the app.
+
+> Build options for GPU acceleration (CUDA, Vulkan, Metal/Core ML, etc.) are
+> documented in the [whisper.cpp README](https://github.com/ggml-org/whisper.cpp#quick-start).
+> On macOS, Metal is enabled by default.
+
+### 2. Download a model
+
+From inside the `whisper.cpp` folder, use the bundled script:
+
+```bash
+# multilingual models
+sh ./models/download-ggml-model.sh base      # good balance for most users
+sh ./models/download-ggml-model.sh small
+sh ./models/download-ggml-model.sh large-v3-turbo
+
+# English-only variants (smaller / faster)
+sh ./models/download-ggml-model.sh base.en
+```
+
+Models are saved as `models/ggml-<name>.bin`. That is the path you set in
+**Model path** in the app. You can also download them manually from
+[huggingface.co/ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp).
+
+### Model sizes (pick based on RAM and speed)
+
+| Model    | Disk    | Memory  | Notes                          |
+| -------- | ------- | ------- | ------------------------------ |
+| `tiny`   | 75 MiB  | ~273 MB | Fastest, lowest accuracy       |
+| `base`   | 142 MiB | ~388 MB | Recommended starting point     |
+| `small`  | 466 MiB | ~852 MB | Better accuracy                |
+| `medium` | 1.5 GiB | ~2.1 GB | High accuracy, slower          |
+| `large`  | 2.9 GiB | ~3.9 GB | Best accuracy, needs more RAM  |
+
+> LocalWhisper records and converts audio to 16 kHz, 16-bit mono WAV, which is
+> exactly the format `whisper-cli` expects — no extra conversion needed.
+
 ## Installation
 
 ```bash
@@ -80,6 +132,18 @@ The app needs two permissions:
 
 In development mode (`npm run dev`), the app appears as **Electron** in system permissions. In the packaged build, it appears as **LocalWhisper**.
 
+## Privacy
+
+LocalWhisper Desktop processes all audio entirely on your device:
+
+- **Audio capture** happens via your operating system's microphone API.
+- **Audio conversion** (WAV encoding) happens locally in the renderer process.
+- **Transcription** is performed by your local `whisper.cpp` binary spawned as a child process.
+- **No audio or text is sent to any external service.** The app itself makes no network requests.
+- The only data stored on disk is the configuration file (paths to your `whisper.cpp` binary, model, language, and shortcut preferences) in the Electron user data directory.
+
+If you use the auto-paste feature (macOS only), transcribed text is temporarily placed in your system clipboard to simulate `Cmd+V`. The text remains in your clipboard after the operation.
+
 ## Packaging
 
 ```bash
@@ -87,6 +151,35 @@ npm run dist
 ```
 
 Generates a `.dmg` in `dist/` for macOS. Linux builds produce `.AppImage`/`.deb`, Windows builds produce `.exe` (NSIS).
+
+### Release build notes
+
+**macOS:**
+- The `.dmg` is produced by `electron-builder` and includes the app bundle.
+- For distribution outside the Mac App Store, the app must be **notarized** by Apple. Without notarization, macOS Gatekeeper will block the app on first launch. Users can override this via **System Settings > Privacy & Security > Open Anyway**.
+- To notarize, set the `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` environment variables before running `npm run dist`. Electron-builder will handle notarization automatically.
+- Code signing requires a valid Apple Developer ID certificate.
+
+**Windows:**
+- The NSIS installer is unsigned by default. Windows SmartScreen may show a warning on first run.
+- Code signing requires an Extended Validation (EV) or OV Code Signing Certificate.
+
+**Linux:**
+- AppImage and `.deb` packages are unsigned by default.
+- Distribution can be done via Flathub, Snap Store, or direct download.
+
+**Development builds:**
+- Running `npm run dev` uses an unsigned development binary. OS security warnings are expected and can be dismissed.
+- In development mode, the app appears as **Electron** in system permissions (not **LocalWhisper**).
+
+## Development
+
+```bash
+npm run check                 # Syntax check all JS files
+npm run dev                   # Run in development mode
+npm run dist                  # Generate installable build
+npm run generate:tray-icons   # Regenerate tray icons from code
+```
 
 ## Troubleshooting
 
@@ -107,7 +200,8 @@ Generates a `.dmg` in `dist/` for macOS. Linux builds produce `.AppImage`/`.deb`
 
 - Grant Accessibility permissions to the app (Electron in dev, LocalWhisper in build).
 - Go to **System Settings > Privacy & Security > Accessibility** and make sure the app is listed and enabled.
-- If it still fails, the text is available in the clipboard (you can paste manually with `Cmd+V`).
+- On Windows/Linux, automatic paste is not supported. The text is in the clipboard — paste manually with `Ctrl+V`.
+- If paste still fails, the text is available in the clipboard.
 
 ### Tray icon not visible
 
@@ -128,14 +222,6 @@ Generates a `.dmg` in `dist/` for macOS. Linux builds produce `.AppImage`/`.deb`
 - Transcription depends on the flags available in your `whisper.cpp` binary.
 - By default, `-np -nt` and any args in `Extra args` are appended.
 - If your binary doesn't support a flag, remove it from `Extra args` or adapt `src/main/stt-service.js`.
-- Automatic paste on macOS uses `osascript` + `System Events`. Not implemented for Windows/Linux in this version.
+- Automatic paste is only supported on macOS (uses `osascript` + `System Events`). On Windows/Linux, the transcribed text is placed in the clipboard for manual paste.
 - Audio capture runs in the renderer process via `getUserMedia`, transcription runs in the main process via `spawn`.
-
-## Development
-
-```bash
-npm run check                 # Syntax check all JS files
-npm run dev                   # Run in development mode
-npm run dist                  # Generate installable build
-npm run generate:tray-icons   # Regenerate tray icons from code
-```
+- Recording is limited to 5 minutes to prevent excessive memory usage.

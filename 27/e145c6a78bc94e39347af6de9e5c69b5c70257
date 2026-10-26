@@ -1,0 +1,16 @@
+README.md
+  h_1727aeeb492b30 91-148,314-318
+docs/GLOSSARY.md
+  h_1727aeeb492b30 1-291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "27e145c6a78bc94e39347af6de9e5c69b5c70257",
+  "prompts": {},
+  "humans": {
+    "h_1727aeeb492b30": {
+      "author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

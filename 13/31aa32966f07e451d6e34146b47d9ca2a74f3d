@@ -1,0 +1,19 @@
+test/main.test.js
+  s_2012a3efe1b737::t_8436e457378355 18-34,336-631
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1331aa32966f07e451d6e34146b47d9ca2a74f3d",
+  "prompts": {},
+  "sessions": {
+    "s_2012a3efe1b737": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1788f-f105-7728-ae11-067cbc519e49",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

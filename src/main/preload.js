@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('localWhisperApi', {
   loadConfig: () => ipcRenderer.invoke('config:load'),
   saveConfig: (config) => ipcRenderer.invoke('config:save', config),
   pickFile: (options) => ipcRenderer.invoke('file:pick', options),
+  describeGlossary: (payload) => ipcRenderer.invoke('glossary:describe', payload),
+  exportGlossary: (payload) => ipcRenderer.invoke('glossary:export', payload),
+  importGlossary: () => ipcRenderer.invoke('glossary:import'),
   transcribe: (audioBase64) => ipcRenderer.invoke('stt:transcribe', { audioBase64 }),
   notifyRendererReady: () => ipcRenderer.invoke('renderer:ready'),
   setRecordingState: (isRecording, phase) =>

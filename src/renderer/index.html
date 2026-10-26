@@ -33,6 +33,27 @@
         <label>Extra whisper.cpp args</label>
         <input id="extraArgs" type="text" placeholder="-ng, -otxt, etc." />
 
+        <label>Vocabulary prompt (English terms, product names, acronyms)</label>
+        <div class="row">
+          <button id="loadStarter">Load starter list</button>
+          <button id="exportGlossary">Export…</button>
+          <button id="importGlossary">Import…</button>
+          <span id="promptStatus" class="status"></span>
+          <span id="glossaryFileStatus" class="status"></span>
+        </div>
+        <textarea id="glossaryPrompt" class="compact" rows="3" placeholder="Kubernetes, deploy, pull request, deadline, roadmap, Notion"></textarea>
+        <p class="hint">Sent to the model as the initial prompt. Put the terms you use most first: whisper only uses about 224 tokens. Generated automatically with <code>--prompt</code>.</p>
+
+        <label>Replacements after transcription (one per line: wrong =&gt; right)</label>
+        <textarea id="substitutions" class="compact" rows="4" placeholder="bac em => backend&#10;buquet d'estagint => bucket de staging&#10;# lines starting with # are ignored"></textarea>
+        <span id="rulesStatus" class="status"></span>
+        <ul id="rulesProblems" class="problems"></ul>
+        <p class="hint">Applied to the final text, whole words only and case-insensitive. Works with any model.</p>
+
+        <label>Try it (optional)</label>
+        <input id="previewInput" type="text" placeholder="el deploy del bac em al buquet d'estagint" />
+        <p id="previewOutput" class="preview" hidden></p>
+
         <label>Global shortcut start/stop</label>
         <div class="row">
           <input id="shortcut" type="text" placeholder="CommandOrControl+Shift+Space" readonly />

@@ -114,6 +114,41 @@ textarea {
   resize: vertical;
 }
 
+textarea.compact {
+  min-height: 78px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: #eef1ef;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #9f1d1d;
+}
+
+.problems:empty {
+  display: none;
+}
+
+.preview {
+  margin: 6px 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #eef1ef;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 700px) {
   .row {
     flex-direction: column;

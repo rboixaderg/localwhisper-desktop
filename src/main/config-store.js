@@ -1,12 +1,19 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { app } = require('electron');
+const {
+  normalizeGlossaryPrompt,
+  MAX_PROMPT_LENGTH,
+  MAX_SUBSTITUTIONS_LENGTH
+} = require('../shared/glossary');
 
 const DEFAULT_CONFIG = {
   whisperBinPath: '',
   modelPath: '',
   language: 'auto',
   extraArgs: '',
+  glossaryPrompt: '',
+  substitutions: '',
   shortcut: 'CommandOrControl+Shift+Space'
 };
 
@@ -34,11 +41,21 @@ function sanitizeConfig(config, strict = false) {
     ? merged.shortcut.trim().slice(0, MAX_ACCELERATOR_LENGTH)
     : DEFAULT_CONFIG.shortcut;
 
+  // The vocabulary prompt is stored already normalized (single line, commas)
+  // so the value written to disk is exactly what whisper-cli receives.
+  const glossaryPrompt = normalizeGlossaryPrompt(merged.glossaryPrompt).slice(0, MAX_PROMPT_LENGTH);
+
+  const substitutions = typeof merged.substitutions === 'string'
+    ? merged.substitutions.trim().slice(0, MAX_SUBSTITUTIONS_LENGTH)
+    : '';
+
   return {
     whisperBinPath,
     modelPath,
     language: normalizeLanguage(merged.language, strict),
     extraArgs,
+    glossaryPrompt,
+    substitutions,
     shortcut
   };
 }

@@ -15,8 +15,23 @@ Module._load = function patchedLoad(request, parent, isMain) {
 const sttService = require('../src/main/stt-service.js');
 const configStore = require('../src/main/config-store.js');
 const audioUtils = require('../src/shared/audio-utils.js');
+const glossary = require('../src/shared/glossary.js');
 
-const { parseExtraArgs, truncateStderr, isGpuCrash, transcribeAudio } = sttService;
+const { parseExtraArgs, buildArgs, truncateStderr, isGpuCrash, transcribeAudio } = sttService;
+const {
+  normalizeGlossaryPrompt,
+  parseSubstitutions,
+  validateSubstitutions,
+  applySubstitutions,
+  estimatePromptTokens,
+  starterPrompt,
+  serializeGlossary,
+  parseGlossaryFile,
+  STARTER_VOCABULARY,
+  GLOSSARY_FILE_HEADER,
+  MAX_GLOSSARY_FILE_LENGTH,
+  PROMPT_TOKEN_LIMIT
+} = glossary;
 const { normalizeLanguage, sanitizeConfig, DEFAULT_CONFIG, loadConfig, saveConfig } = configStore;
 const { mergeFloat32, downsampleBuffer, encodeWavFromFloat32, arrayBufferToBase64 } = audioUtils;
 
@@ -316,5 +331,301 @@ describe('loadConfig / saveConfig', () => {
       () => saveConfig({ language: 'english' }),
       /Invalid language code/
     );
+  });
+});
+
+describe('normalizeGlossaryPrompt', () => {
+  it('returns empty string for non-strings', () => {
+    assert.strictEqual(normalizeGlossaryPrompt(null), '');
+    assert.strictEqual(normalizeGlossaryPrompt(undefined), '');
+    assert.strictEqual(normalizeGlossaryPrompt(42), '');
+  });
+
+  it('collapses newlines and separators into commas', () => {
+    const raw = 'Kubernetes\ndeploy; pull request | deadline';
+    assert.strictEqual(
+      normalizeGlossaryPrompt(raw),
+      'Kubernetes, deploy, pull request, deadline'
+    );
+  });
+
+  it('drops wrapping quotes and extra whitespace', () => {
+    assert.strictEqual(normalizeGlossaryPrompt('  "Kubernetes, deploy"  '), 'Kubernetes, deploy');
+  });
+
+  it('removes duplicated and leading/trailing commas', () => {
+    assert.strictEqual(normalizeGlossaryPrompt(', deploy,, roadmap,'), 'deploy, roadmap');
+  });
+
+  it('caps the prompt length', () => {
+    const long = 'term,' .repeat(500);
+    assert.ok(normalizeGlossaryPrompt(long).length <= 600);
+  });
+});
+
+describe('parseSubstitutions', () => {
+  it('returns no rules for empty input', () => {
+    assert.deepStrictEqual(parseSubstitutions(''), []);
+    assert.deepStrictEqual(parseSubstitutions(null), []);
+  });
+
+  it('parses => rules', () => {
+    assert.deepStrictEqual(parseSubstitutions('bac em => backend'), [
+      { from: 'bac em', to: 'backend' }
+    ]);
+  });
+
+  it('accepts -> and = as separators', () => {
+    assert.deepStrictEqual(parseSubstitutions('a -> b\nc = d'), [
+      { from: 'a', to: 'b' },
+      { from: 'c', to: 'd' }
+    ]);
+  });
+
+  it('ignores comments, blanks and malformed lines', () => {
+    const raw = '# comment\n\nno separator here\nbac em => backend';
+    assert.deepStrictEqual(parseSubstitutions(raw), [{ from: 'bac em', to: 'backend' }]);
+  });
+
+  it('keeps the first rule for duplicated keys (case-insensitive)', () => {
+    const rules = parseSubstitutions('bug => error\nBUG => defecte');
+    assert.deepStrictEqual(rules, [{ from: 'bug', to: 'error' }]);
+  });
+
+  it('drops rules where both sides are identical', () => {
+    assert.deepStrictEqual(parseSubstitutions('deploy => DEPLOY'), []);
+  });
+});
+
+describe('applySubstitutions', () => {
+  const rules = parseSubstitutions('bac em => backend\nbuquet d\'estagint => bucket de staging');
+
+  it('returns the text untouched without rules', () => {
+    assert.strictEqual(applySubstitutions('hola', []), 'hola');
+    assert.strictEqual(applySubstitutions('', rules), '');
+  });
+
+  it('replaces mangled terms', () => {
+    assert.strictEqual(
+      applySubstitutions('el deploy del bac em al buquet d\'estagint', rules),
+      'el deploy del backend al bucket de staging'
+    );
+  });
+
+  it('is case-insensitive', () => {
+    assert.strictEqual(applySubstitutions('El Bac Em falla', rules), 'El backend falla');
+  });
+
+  it('only replaces whole words', () => {
+    const r = parseSubstitutions('desbord => dashboard');
+    assert.strictEqual(applySubstitutions('el desbordament és gran', r), 'el desbordament és gran');
+  });
+
+  it('treats $ sequences in the replacement literally', () => {
+    const r = parseSubstitutions('cost => 5$&');
+    assert.strictEqual(applySubstitutions('el cost', r), 'el 5$&');
+  });
+
+  it('applies longer keys first so overlapping rules resolve', () => {
+    const r = parseSubstitutions('pull => push\npull request => PR');
+    assert.strictEqual(applySubstitutions('obre el pull request', r), 'obre el PR');
+  });
+});
+
+describe('buildArgs', () => {
+  const base = { modelPath: '/m.bin', audioPath: '/in.wav', language: 'ca' };
+
+  it('adds the vocabulary prompt as two separate args', () => {
+    const args = buildArgs({ ...base, glossaryPrompt: 'Kubernetes, deploy' });
+    const idx = args.indexOf('--prompt');
+    assert.ok(idx >= 0);
+    assert.strictEqual(args[idx + 1], 'Kubernetes, deploy');
+    assert.deepStrictEqual(args.slice(-2), ['-l', 'ca']);
+  });
+
+  it('omits the prompt when empty', () => {
+    assert.ok(!buildArgs({ ...base, glossaryPrompt: '' }).includes('--prompt'));
+  });
+
+  it('does not duplicate --prompt coming from extra args', () => {
+    const args = buildArgs({
+      ...base,
+      extraArgs: '--prompt "manual terms"',
+      glossaryPrompt: 'Kubernetes'
+    });
+    assert.strictEqual(args.filter((a) => a === '--prompt').length, 1);
+    assert.ok(args.includes('manual terms'));
+  });
+
+  it('omits the language flag for auto', () => {
+    assert.ok(!buildArgs({ ...base, language: 'auto' }).includes('-l'));
+  });
+});
+
+describe('sanitizeConfig glossary fields', () => {
+  it('defaults to empty strings', () => {
+    const result = sanitizeConfig({});
+    assert.strictEqual(result.glossaryPrompt, '');
+    assert.strictEqual(result.substitutions, '');
+  });
+
+  it('normalizes the prompt before storing it', () => {
+    const result = sanitizeConfig({ glossaryPrompt: 'Kubernetes\ndeploy' });
+    assert.strictEqual(result.glossaryPrompt, 'Kubernetes, deploy');
+  });
+
+  it('caps the substitutions field', () => {
+    const result = sanitizeConfig({ substitutions: 'a => b\n'.repeat(2000) });
+    assert.ok(result.substitutions.length <= 4000);
+  });
+
+  it('ignores non-string glossary fields', () => {
+    const result = sanitizeConfig({ glossaryPrompt: 1, substitutions: {} });
+    assert.strictEqual(result.glossaryPrompt, '');
+    assert.strictEqual(result.substitutions, '');
+  });
+});
+
+describe('validateSubstitutions', () => {
+  it('reports a missing separator with its line number', () => {
+    const { rules, problems } = validateSubstitutions('bac em => backend\nPipalina');
+    assert.strictEqual(rules.length, 1);
+    assert.deepStrictEqual(problems, [
+      { line: 2, text: 'Pipalina', reason: 'missing separator (use =>, -> or =)' }
+    ]);
+  });
+
+  it('reports an empty right side', () => {
+    const { problems } = validateSubstitutions('bac em =>');
+    assert.deepStrictEqual(problems, [
+      { line: 1, text: 'bac em =>', reason: 'empty right side' }
+    ]);
+  });
+
+  it('reports an empty left side', () => {
+    const { problems } = validateSubstitutions('=> backend');
+    assert.deepStrictEqual(problems, [
+      { line: 1, text: '=> backend', reason: 'empty left side' }
+    ]);
+  });
+
+  it('reports duplicated keys pointing at the first line', () => {
+    const { rules, problems } = validateSubstitutions('bug => error\nBUG => defecte');
+    assert.strictEqual(rules.length, 1);
+    assert.strictEqual(problems.length, 1);
+    assert.strictEqual(problems[0].line, 2);
+    assert.match(problems[0].reason, /duplicate of line 1/);
+  });
+
+  it('reports identical sides', () => {
+    const { problems } = validateSubstitutions('deploy => Deploy');
+    assert.strictEqual(problems[0].reason, 'both sides are the same');
+  });
+
+  it('ignores comments and blank lines without reporting them', () => {
+    const { rules, problems } = validateSubstitutions('# note\n\nbac em => backend');
+    assert.strictEqual(rules.length, 1);
+    assert.deepStrictEqual(problems, []);
+  });
+
+  it('returns empty results for non-strings', () => {
+    const { rules, problems } = validateSubstitutions(null);
+    assert.deepStrictEqual(rules, []);
+    assert.deepStrictEqual(problems, []);
+  });
+});
+
+describe('estimatePromptTokens', () => {
+  it('returns zero for empty input', () => {
+    assert.strictEqual(estimatePromptTokens(''), 0);
+    assert.strictEqual(estimatePromptTokens(null), 0);
+    assert.strictEqual(estimatePromptTokens('   '), 0);
+  });
+
+  it('grows with the prompt length', () => {
+    const short = estimatePromptTokens('Kubernetes');
+    const long = estimatePromptTokens(STARTER_VOCABULARY.join(', '));
+    assert.ok(long > short);
+  });
+
+  it('keeps the starter list under the token limit', () => {
+    assert.ok(estimatePromptTokens(starterPrompt()) < PROMPT_TOKEN_LIMIT);
+  });
+});
+
+describe('starterPrompt', () => {
+  it('is a comma separated list of terms', () => {
+    const prompt = starterPrompt();
+    assert.ok(prompt.length > 0);
+    assert.ok(prompt.includes(', '));
+    assert.strictEqual(prompt.split(', ').length, STARTER_VOCABULARY.length);
+  });
+
+  it('fits in the stored prompt cap', () => {
+    assert.ok(starterPrompt().length <= 600);
+  });
+
+  it('stays generic (no word from the personal test sentences)', () => {
+    const prompt = starterPrompt().toLowerCase();
+    for (const personal of ['bac em', 'pipalina', 'buquet']) {
+      assert.ok(!prompt.includes(personal), `starter list must not contain ${personal}`);
+    }
+  });
+});
+
+describe('serializeGlossary / parseGlossaryFile', () => {
+  const sample = {
+    glossaryPrompt: 'Kubernetes\ndeploy',
+    substitutions: "bac em => backend\nPipalina => pipeline"
+  };
+
+  it('round-trips a glossary', () => {
+    const parsed = parseGlossaryFile(serializeGlossary(sample));
+    assert.strictEqual(parsed.glossaryPrompt, 'Kubernetes, deploy');
+    assert.strictEqual(parsed.substitutions, 'bac em => backend\nPipalina => pipeline');
+    assert.deepStrictEqual(parsed.problems, []);
+  });
+
+  it('starts with a versioned header', () => {
+    assert.ok(serializeGlossary(sample).startsWith(GLOSSARY_FILE_HEADER));
+  });
+
+  it('handles CRLF line endings', () => {
+    const text = serializeGlossary(sample).replace(/\n/g, '\r\n');
+    const parsed = parseGlossaryFile(text);
+    assert.strictEqual(parsed.glossaryPrompt, 'Kubernetes, deploy');
+    assert.strictEqual(parsed.substitutions.split('\n').length, 2);
+  });
+
+  it('treats a file without sections as a plain rule list', () => {
+    const parsed = parseGlossaryFile('# my rules\nbac em => backend');
+    assert.strictEqual(parsed.glossaryPrompt, '');
+    assert.strictEqual(parsed.substitutions, 'bac em => backend');
+    assert.deepStrictEqual(parsed.problems, []);
+  });
+
+  it('reports unknown sections', () => {
+    const parsed = parseGlossaryFile('[prompt]\nKubernetes\n[modelos]\nxx');
+    assert.strictEqual(parsed.glossaryPrompt, 'Kubernetes');
+    assert.strictEqual(parsed.problems[0].line, 3);
+    assert.match(parsed.problems[0].reason, /unknown section \[modelos\]/);
+  });
+
+  it('reports invalid rules inside the file', () => {
+    const parsed = parseGlossaryFile('[substitutions]\nPipalina');
+    assert.strictEqual(parsed.problems[0].reason, 'missing separator (use =>, -> or =)');
+  });
+
+  it('rejects empty files', () => {
+    assert.strictEqual(parseGlossaryFile('   ').problems[0].reason, 'file is empty');
+  });
+
+  it('rejects oversized files', () => {
+    const big = 'x'.repeat(MAX_GLOSSARY_FILE_LENGTH + 1);
+    assert.strictEqual(parseGlossaryFile(big).problems[0].reason, 'file is too large');
+  });
+
+  it('survives non-string input', () => {
+    assert.strictEqual(parseGlossaryFile(null).problems[0].reason, 'file is empty');
   });
 });

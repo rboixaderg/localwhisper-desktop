@@ -88,8 +88,64 @@ npm run dev
 3. Select the model path.
 4. Optional: configure language (`auto`, `en`, `es`, `ca`, ...).
 5. Optional: add extra args (`-ng`, `-otxt`, etc.).
-6. Configure the global shortcut (default: `CommandOrControl+Shift+Space`).
-7. Click `Save Configuration`.
+6. Optional: fill in the **Vocabulary prompt** and **Replacements** glossary (see below).
+7. Configure the global shortcut (default: `CommandOrControl+Shift+Space`).
+8. Click `Save Configuration`.
+
+### Technical vocabulary and anglicisms
+
+> Internals, limits and design decisions: [`docs/GLOSSARY.md`](docs/GLOSSARY.md).
+
+Speech models have no idea of your private vocabulary. If you dictate technical
+Catalan with English terms (`deploy`, `pull request`, `deadline`), the model
+spells them phonetically in Catalan (`bac em`, `de l'Adlina`). Two layers fix
+this, and both work with **any** model:
+
+**1. Vocabulary prompt** — sent to the decoder as `--prompt <text>`. It biases
+the decoder towards those spellings. Keep the terms you use most first: whisper
+only uses about 224 tokens, and a live counter warns you when you go over
+budget. `Load starter list` fills a generic Catalan + English software
+vocabulary that you can then edit. Example:
+
+```
+Kubernetes, deploy, backend, frontend, code review, pull request,
+deadline, roadmap, dashboard, Grafana, logs, pipeline, build, staging,
+bucket, sprint, Notion, meeting, team
+```
+
+**2. Replacements** — applied to the transcription after the model runs. One
+rule per line, `wrong => right` (`->` and `=` also work), whole words only and
+case-insensitive. Lines starting with `#` are ignored. Invalid lines are
+reported under the field (with their line number) instead of being silently
+skipped, and the `Try it` box shows what a given transcript would become.
+Example:
+
+```
+bac em => backend
+buquet d'estagint => bucket de staging
+Pipalina => pipeline
+desbord => dashboard
+```
+
+Measured behaviour on a Catalan sentence with English terms: without the prompt
+the output is unusable for the technical words (`de ploi del bac em`, `co de
+Raviev`); with the prompt plus two replacement rules it is letter-perfect.
+
+The prompt layer pays off most on multilingual checkpoints (`large-v3`,
+`large-v3-turbo`). Catalan-only fine-tunes tend to ignore it, because they were
+trained to write English loanwords with Catalan spelling. The replacement layer
+is completely independent of the model.
+
+The glossary is global for the app: one vocabulary prompt and one rule list,
+stored in your own `config.json`. Nothing is hardcoded and nothing is shared
+between installations.
+
+**Sharing and backups.** `Export…` writes a `localwhisper-glossary.txt` you can
+commit, copy to another machine or send to a colleague. `Import…` reads it
+back, shows a confirmation listing any invalid lines, and fills the fields —
+you still have to click `Save Configuration`, like any other change. A file
+without `[prompt]` / `[substitutions]` sections is treated as a plain rule
+list, so pasting one around works without ceremony.
 
 ### Manual recording (in-app)
 
@@ -255,7 +311,10 @@ npm run generate:tray-icons   # Regenerate tray icons from code
 
 - Transcription depends on the flags available in your `whisper.cpp` binary.
 - By default, `-np -nt` and any args in `Extra args` are appended.
-- If your binary doesn't support a flag, remove it from `Extra args` or adapt `src/main/stt-service.js`.
-- Automatic paste is only supported on macOS (uses `osascript` + `System Events`). On Windows/Linux, the transcribed text is placed in the clipboard for manual paste.
+- The vocabulary prompt is passed as `--prompt <text>` (two separate argv entries, no quoting needed). If you already pass `--prompt` in `Extra args`, that one wins and the field is ignored. whisper.cpp only uses about 224 tokens of it; the UI estimates the count as characters/4.
+- Replacements are applied to the final text in `src/main/stt-service.js`, so they also affect automatic paste and the in-app textarea. Matching is whole-word and case-insensitive, longer keys first, and rules are applied in sequence.
+- Glossary limits: 600 characters for the prompt, 4,000 for the rule list, 200 rules, 80 characters per left side, 128 KB per imported file.
+- See [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for the full mechanics, the IPC contract, and the rejected alternatives.
+- If your binary doesn't support a flag, remove it from `Extra args` or adapt `src/main/stt-service.js`.- Automatic paste is only supported on macOS (uses `osascript` + `System Events`). On Windows/Linux, the transcribed text is placed in the clipboard for manual paste.
 - Audio capture runs in the renderer process via `getUserMedia`, transcription runs in the main process via `spawn`.
 - Recording is limited to 5 minutes to prevent excessive memory usage.

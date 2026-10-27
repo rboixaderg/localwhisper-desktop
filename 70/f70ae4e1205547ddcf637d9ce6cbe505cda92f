@@ -1,0 +1,21 @@
+docs/GLOSSARY.md
+  s_13b64cc5e9347a::t_21425caab116de 81-91,152,156-164,224-231,254-255,258,263-269,291,316-317
+test/main.test.js
+  s_13b64cc5e9347a::t_0dd3016c1c7d8c 477-480,552
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "70f70ae4e1205547ddcf637d9ce6cbe505cda92f",
+  "prompts": {},
+  "sessions": {
+    "s_13b64cc5e9347a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17c6c-7642-74d6-878f-cf59e8ae3c4b",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

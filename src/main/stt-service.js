@@ -2,6 +2,11 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const {
+  normalizeGlossaryPrompt,
+  parseSubstitutions,
+  applySubstitutions
+} = require('../shared/glossary');
 
 const MAX_AUDIO_BASE64_LENGTH = 25 * 1024 * 1024;
 
@@ -62,6 +67,27 @@ function isGpuCrash(error) {
   return /exit 139|signal SIGSEGV/i.test(error?.message || '');
 }
 
+/**
+ * Builds the whisper-cli argument list. Exposed separately so the prompt
+ * handling can be unit-tested without spawning a process.
+ */
+function buildArgs({ modelPath, audioPath, language, extraArgs, glossaryPrompt }) {
+  const parsedExtra = parseExtraArgs(extraArgs);
+  const args = ['-m', modelPath, '-f', audioPath, '-np', '-nt', ...parsedExtra];
+
+  // Vocabulary prompt: English technical terms, product names, acronyms.
+  // Skipped when the user already passes --prompt through extra args.
+  const prompt = normalizeGlossaryPrompt(glossaryPrompt);
+  const hasPromptArg = parsedExtra.some(
+    (a) => a === '--prompt' || a.startsWith('--prompt=')
+  );
+  if (prompt && !hasPromptArg) args.push('--prompt', prompt);
+
+  if (language && language !== 'auto') args.push('-l', language);
+
+  return args;
+}
+
 function runWhisper(binPath, args, cwd) {
   return new Promise((resolve, reject) => {
     const proc = spawn(binPath, args, { stdio: ['ignore', 'pipe', 'pipe'], cwd });
@@ -108,7 +134,7 @@ async function findOutputTextInDir(dir) {
 }
 
 async function transcribeAudio({ audioBase64, config }) {
-  const { whisperBinPath, modelPath, language, extraArgs } = config;
+  const { whisperBinPath, modelPath, language, extraArgs, glossaryPrompt, substitutions } = config;
 
   if (!audioBase64 || typeof audioBase64 !== 'string') {
     throw new Error('No audio data provided.');
@@ -135,8 +161,12 @@ async function transcribeAudio({ audioBase64, config }) {
     const parsedExtra = parseExtraArgs(extraArgs);
     const usesOutputFile = parsedExtra.some((a) => /^-o(txt|srt|vtt|csv|json)$/.test(a));
 
-    const args = ['-m', modelPath, '-f', audioPath, '-np', '-nt', ...parsedExtra];
-    if (language && language !== 'auto') args.push('-l', language);
+    const args = buildArgs({ modelPath, audioPath, language, extraArgs, glossaryPrompt });
+
+    // Post-processing glossary. Applied to whatever the model returned, so it
+    // works the same with any model or quantization.
+    const rules = parseSubstitutions(substitutions);
+    const finish = (text) => (rules.length ? applySubstitutions(text, rules) : text);
 
     let result;
     try {
@@ -155,14 +185,14 @@ async function transcribeAudio({ audioBase64, config }) {
     // stdout may contain non-text artifacts (e.g. "#"), so prefer the sidecar.
     if (usesOutputFile) {
       const sidecarText = await findOutputTextInDir(tmpDir);
-      if (sidecarText) return sidecarText;
+      if (sidecarText) return finish(sidecarText);
     }
 
-    if (stdoutText) return stdoutText;
+    if (stdoutText) return finish(stdoutText);
 
     // Fallback: check for sidecar files even without explicit output flag
     const sidecarText = await findOutputTextInDir(tmpDir);
-    if (sidecarText) return sidecarText;
+    if (sidecarText) return finish(sidecarText);
 
     const stderrText = (result.stderr || '').trim();
 
@@ -184,4 +214,4 @@ async function transcribeAudio({ audioBase64, config }) {
   }
 }
 
-module.exports = { transcribeAudio, parseExtraArgs, truncateStderr, isGpuCrash };
+module.exports = { transcribeAudio, parseExtraArgs, buildArgs, truncateStderr, isGpuCrash };

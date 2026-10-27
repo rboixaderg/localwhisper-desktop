@@ -1,7 +1,19 @@
 const path = require('node:path');
+const fs = require('node:fs/promises');
 const { app, BrowserWindow, ipcMain, dialog, systemPreferences, globalShortcut, shell } = require('electron');
 const { loadConfig, saveConfig } = require('./config-store');
 const { transcribeAudio } = require('./stt-service');
+const {
+  normalizeGlossaryPrompt,
+  validateSubstitutions,
+  applySubstitutions,
+  estimatePromptTokens,
+  starterPrompt,
+  serializeGlossary,
+  parseGlossaryFile,
+  MAX_GLOSSARY_FILE_LENGTH,
+  PROMPT_TOKEN_LIMIT
+} = require('../shared/glossary');
 const { pasteTextToActiveApp } = require('./paste-service');
 const trayManager = require('./tray-manager');
 const overlayWindow = require('./overlay-window');
@@ -252,6 +264,82 @@ ipcMain.handle('stt:transcribe', async (event, payload) => {
   }
   const config = await loadConfig();
   return transcribeAudio({ audioBase64: payload.audioBase64, config });
+});
+
+ipcMain.handle('glossary:describe', (event, payload) => {
+  validateSender(event);
+  const input = payload && typeof payload === 'object' ? payload : {};
+  const prompt = normalizeGlossaryPrompt(input.glossaryPrompt);
+  const { rules, problems } = validateSubstitutions(input.substitutions);
+  const sample = typeof input.sampleText === 'string' ? input.sampleText.slice(0, 2000) : '';
+  // Whisper's byte-level vocabulary uses at most one token per UTF-8 byte.
+  // This is an upper bound, not an exact count for the configured model.
+  const promptTokenUpperBound = Buffer.byteLength(prompt, 'utf8');
+  let preview = '';
+  let previewError = '';
+  try {
+    preview = sample ? applySubstitutions(sample, rules) : '';
+  } catch (error) {
+    previewError = error.message;
+  }
+
+  return {
+    ruleCount: rules.length,
+    problems,
+    promptTokens: estimatePromptTokens(prompt),
+    promptTokenUpperBound,
+    promptMayExceedLimit: promptTokenUpperBound > PROMPT_TOKEN_LIMIT,
+    promptTokenLimit: PROMPT_TOKEN_LIMIT,
+    preview,
+    previewError,
+    starterPrompt: starterPrompt()
+  };
+});
+
+ipcMain.handle('glossary:export', async (event, payload) => {
+  validateSender(event);
+  const input = payload && typeof payload === 'object' ? payload : {};
+  const content = serializeGlossary({
+    glossaryPrompt: input.glossaryPrompt,
+    substitutions: input.substitutions
+  });
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export glossary',
+    defaultPath: 'localwhisper-glossary.txt',
+    filters: [{ name: 'Text', extensions: ['txt'] }]
+  });
+
+  if (result.canceled || !result.filePath) return { saved: false };
+
+  await fs.writeFile(result.filePath, content, 'utf8');
+  return { saved: true, path: result.filePath };
+});
+
+ipcMain.handle('glossary:import', async (event) => {
+  validateSender(event);
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import glossary',
+    properties: ['openFile'],
+    filters: [{ name: 'Text', extensions: ['txt', 'md'] }]
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return { imported: false };
+
+  const filePath = result.filePaths[0];
+  const stats = await fs.stat(filePath);
+
+  if (stats.size > MAX_GLOSSARY_FILE_LENGTH) {
+    throw new Error('Glossary file is too large (128 KB max).');
+  }
+
+  const text = await fs.readFile(filePath, 'utf8');
+  const parsed = parseGlossaryFile(text);
+  const fatalProblem = parsed.problems.find((problem) => problem.line === 0);
+  if (fatalProblem) throw new Error(fatalProblem.reason);
+
+  return { imported: true, path: filePath, ...parsed };
 });
 
 ipcMain.handle('renderer:ready', (event) => {

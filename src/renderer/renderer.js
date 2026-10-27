@@ -19,6 +19,17 @@ const domElements = {
   modelPath: document.getElementById("modelPath"),
   language: document.getElementById("language"),
   extraArgs: document.getElementById("extraArgs"),
+  glossaryPrompt: document.getElementById("glossaryPrompt"),
+  substitutions: document.getElementById("substitutions"),
+  loadStarter: document.getElementById("loadStarter"),
+  exportGlossary: document.getElementById("exportGlossary"),
+  importGlossary: document.getElementById("importGlossary"),
+  promptStatus: document.getElementById("promptStatus"),
+  rulesStatus: document.getElementById("rulesStatus"),
+  rulesProblems: document.getElementById("rulesProblems"),
+  previewInput: document.getElementById("previewInput"),
+  previewOutput: document.getElementById("previewOutput"),
+  glossaryFileStatus: document.getElementById("glossaryFileStatus"),
   shortcut: document.getElementById("shortcut"),
   clearShortcut: document.getElementById("clearShortcut"),
   saveConfig: document.getElementById("saveConfig"),
@@ -142,6 +153,8 @@ function getConfigFromUi() {
     modelPath: domElements.modelPath.value.trim(),
     language: domElements.language.value.trim() || "auto",
     extraArgs: domElements.extraArgs.value.trim(),
+    glossaryPrompt: domElements.glossaryPrompt.value.trim(),
+    substitutions: domElements.substitutions.value.trim(),
     shortcut: domElements.shortcut.value.trim(),
   };
 }
@@ -151,13 +164,154 @@ function setConfigToUi(config) {
   domElements.modelPath.value = config.modelPath || "";
   domElements.language.value = config.language || "auto";
   domElements.extraArgs.value = config.extraArgs || "";
+  domElements.glossaryPrompt.value = config.glossaryPrompt || "";
+  domElements.substitutions.value = config.substitutions || "";
   domElements.shortcut.value = config.shortcut || "";
 }
 
 async function loadInitialConfig() {
   const config = await window.localWhisperApi.loadConfig();
   setConfigToUi(config);
+  refreshGlossaryFeedback();
   updateShortcutFeedbackFromMain();
+}
+
+// --- Glossary feedback (validation, token budget, live preview) ---
+
+let glossaryTimer = null;
+
+function scheduleGlossaryFeedback() {
+  if (glossaryTimer) clearTimeout(glossaryTimer);
+  glossaryTimer = setTimeout(() => {
+    glossaryTimer = null;
+    refreshGlossaryFeedback();
+  }, 150);
+}
+
+async function refreshGlossaryFeedback() {
+  let info;
+  try {
+    info = await window.localWhisperApi.describeGlossary({
+      glossaryPrompt: domElements.glossaryPrompt.value,
+      substitutions: domElements.substitutions.value,
+      sampleText: domElements.previewInput.value,
+    });
+  } catch {
+    return;
+  }
+
+  const upperBound = info.promptTokenUpperBound || 0;
+  const limit = info.promptTokenLimit || 224;
+  const mayExceedLimit = info.promptMayExceedLimit;
+  domElements.promptStatus.textContent = upperBound
+    ? `Up to ${upperBound} tokens (conservative bound)` +
+      (mayExceedLimit ? ` · may exceed ${limit}; shorten the list` : "")
+    : "";
+  domElements.promptStatus.style.color = mayExceedLimit ? "#9f1d1d" : "#1f7a5a";
+
+  const rules = info.ruleCount || 0;
+  const problems = info.problems || [];
+  const parts = [`${rules} rule${rules === 1 ? "" : "s"} active`];
+  if (problems.length) {
+    parts.push(
+      `${problems.length} problem${problems.length === 1 ? "" : "s"}`,
+    );
+  }
+  domElements.rulesStatus.textContent = rules || problems.length ? parts.join(" \u00b7 ") : "";
+  domElements.rulesStatus.style.color = problems.length ? "#9f1d1d" : "#1f7a5a";
+
+  domElements.rulesProblems.replaceChildren();
+  for (const problem of problems.slice(0, 10)) {
+    const item = document.createElement("li");
+    item.textContent = problem.line
+      ? `line ${problem.line}: ${problem.reason}`
+      : problem.reason;
+    domElements.rulesProblems.appendChild(item);
+  }
+
+  const preview = info.preview || "";
+  const sample = domElements.previewInput.value.trim();
+  domElements.previewOutput.hidden = !sample;
+  domElements.previewOutput.textContent = sample
+    ? info.previewError || preview || sample
+    : "";
+  domElements.previewOutput.style.color = info.previewError ? "#9f1d1d" : "";
+}
+
+function loadStarterVocabulary() {
+  const current = domElements.glossaryPrompt.value.trim();
+  if (current) {
+    const ok = window.confirm(
+      "Replace the current vocabulary prompt with the starter list?",
+    );
+    if (!ok) return;
+  }
+
+  window.localWhisperApi
+    .describeGlossary({ substitutions: "" })
+    .then((info) => {
+      domElements.glossaryPrompt.value = info.starterPrompt || "";
+      refreshGlossaryFeedback();
+    })
+    .catch(() => {});
+}
+
+function setGlossaryFileStatus(text, isError = false) {
+  domElements.glossaryFileStatus.textContent = text || "";
+  domElements.glossaryFileStatus.style.color = isError ? "#9f1d1d" : "#1f7a5a";
+}
+
+async function exportGlossaryFile() {
+  setGlossaryFileStatus("");
+
+  try {
+    const result = await window.localWhisperApi.exportGlossary({
+      glossaryPrompt: domElements.glossaryPrompt.value,
+      substitutions: domElements.substitutions.value,
+    });
+
+    if (result && result.saved) {
+      setGlossaryFileStatus(`Saved to ${result.path}`);
+    }
+  } catch (error) {
+    setGlossaryFileStatus(error.message || "Could not export the glossary.", true);
+  }
+}
+
+async function importGlossaryFile() {
+  setGlossaryFileStatus("");
+
+  let result;
+  try {
+    result = await window.localWhisperApi.importGlossary();
+  } catch (error) {
+    setGlossaryFileStatus(error.message || "Could not import the glossary.", true);
+    return;
+  }
+
+  if (!result || !result.imported) return;
+
+  const problems = result.problems || [];
+  const warning = problems.length
+    ? `\n\n${problems.length} line(s) will be ignored:\n` +
+      problems
+        .slice(0, 5)
+        .map((p) => `line ${p.line}: ${p.reason}`)
+        .join("\n")
+    : "";
+
+  const ok = window.confirm(
+    `Import glossary from:\n${result.path}\n\n` +
+      "This replaces your current vocabulary prompt and replacements." +
+      warning,
+  );
+
+  if (!ok) return;
+
+  domElements.glossaryPrompt.value = result.glossaryPrompt || "";
+  domElements.substitutions.value = result.substitutions || "";
+  await refreshGlossaryFeedback();
+  setGlossaryFileStatus("Imported. Click Save Configuration to keep it.");
 }
 
 async function loadPermissionsStatus() {
@@ -187,6 +341,7 @@ async function saveConfig() {
     const config = getConfigFromUi();
     const savedConfig = await window.localWhisperApi.saveConfig(config);
     setConfigToUi(savedConfig);
+    await refreshGlossaryFeedback();
     setConfigStatus("Configuration saved.");
 
     await window.localWhisperApi.registerShortcut(savedConfig.shortcut);
@@ -492,6 +647,12 @@ domElements.startRec.addEventListener("click", () => {
 domElements.stopRec.addEventListener("click", stopRecordingAndTranscribe);
 domElements.shortcut.addEventListener("keydown", handleShortcutKeydown);
 domElements.clearShortcut.addEventListener("click", handleClearShortcut);
+domElements.glossaryPrompt.addEventListener("input", scheduleGlossaryFeedback);
+domElements.substitutions.addEventListener("input", scheduleGlossaryFeedback);
+domElements.previewInput.addEventListener("input", scheduleGlossaryFeedback);
+domElements.loadStarter.addEventListener("click", loadStarterVocabulary);
+domElements.exportGlossary.addEventListener("click", exportGlossaryFile);
+domElements.importGlossary.addEventListener("click", importGlossaryFile);
 
 if (domElements.accessibilityBtn) {
   domElements.accessibilityBtn.addEventListener(

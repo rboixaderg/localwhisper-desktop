@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const glossary = require('../src/shared/glossary');
+const { version: appVersion } = require('../package.json');
 
 function loadModule(file, mocks) {
   const module = { exports: {} };
@@ -24,7 +25,7 @@ function mainHandlers(fileText) {
   const handlers = new Map();
   loadModule('src/main/main.js', {
     electron: {
-      app: { whenReady: () => ({ then() {} }), on() {} },
+      app: { whenReady: () => ({ then() {} }), on() {}, getVersion: () => appVersion },
       ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
       dialog: { showOpenDialog: async () => ({ canceled: false, filePaths: ['/glossary.txt'] }) }
     },
@@ -48,6 +49,7 @@ async function renderer() {
     return elements.get(id);
   };
   const api = {
+    getAppVersion: async () => mainHandlers().get('app:get-version')(event),
     loadConfig: async () => ({}),
     saveConfig: async config => configStore.sanitizeConfig(config, true),
     describeGlossary: async payload => mainHandlers().get('glossary:describe')(event, payload),
@@ -219,6 +221,39 @@ describe('glossary review regressions', () => {
 
   it('still supports ordinary sequential chaining and literal replacements', () => {
     assert.equal(glossary.applySubstitutions('alpha', glossary.parseSubstitutions('alpha => beta\nbeta => $&')), '$&');
+  });
+});
+
+describe('app version', () => {
+  it('reads the running app version through a validated IPC handler', () => {
+    const handler = mainHandlers().get('app:get-version');
+    assert.equal(handler(event), appVersion);
+    assert.throws(() => handler({ senderFrame: { url: 'https://example.com' } }), /only allowed/);
+  });
+
+  it('exposes version retrieval through the preload bridge', async () => {
+    let api;
+    const calls = [];
+    loadModule('src/main/preload.js', {
+      electron: {
+        contextBridge: { exposeInMainWorld: (name, value) => { api = value; } },
+        ipcRenderer: { invoke: async channel => { calls.push(channel); return appVersion; } }
+      }
+    });
+    assert.equal(await api.getAppVersion(), appVersion);
+    assert.deepEqual(calls, ['app:get-version']);
+  });
+
+  it('displays the runtime version in the header and window title on startup', async () => {
+    const { context, element } = await renderer();
+    assert.equal(element('appVersion').textContent, `v${appVersion}`);
+    assert.equal(context.document.title, `LocalWhisper ${appVersion}`);
+  });
+
+  it('keeps both root lockfile versions in sync with package.json', () => {
+    const lock = require('../package-lock.json');
+    assert.equal(lock.version, appVersion);
+    assert.equal(lock.packages[''].version, appVersion);
   });
 });
 

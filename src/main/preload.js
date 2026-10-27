@@ -18,6 +18,7 @@ function createIpcListener(channel) {
 }
 
 contextBridge.exposeInMainWorld('localWhisperApi', {
+  getAppVersion: () => ipcRenderer.invoke('app:get-version'),
   loadConfig: () => ipcRenderer.invoke('config:load'),
   saveConfig: (config) => ipcRenderer.invoke('config:save', config),
   pickFile: (options) => ipcRenderer.invoke('file:pick', options),

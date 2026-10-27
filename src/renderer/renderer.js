@@ -15,6 +15,7 @@ const MAX_RECORDING_DURATION_MS = 5 * 60 * 1000;
 let recordingTimer = null;
 
 const domElements = {
+  appVersion: document.getElementById("appVersion"),
   whisperBinPath: document.getElementById("whisperBinPath"),
   modelPath: document.getElementById("modelPath"),
   language: document.getElementById("language"),
@@ -312,6 +313,16 @@ async function importGlossaryFile() {
   domElements.substitutions.value = result.substitutions || "";
   await refreshGlossaryFeedback();
   setGlossaryFileStatus("Imported. Click Save Configuration to keep it.");
+}
+
+async function loadAppVersion() {
+  try {
+    const version = await window.localWhisperApi.getAppVersion();
+    domElements.appVersion.textContent = `v${version}`;
+    document.title = `LocalWhisper ${version}`;
+  } catch (error) {
+    console.error("Failed to load app version:", error);
+  }
 }
 
 async function loadPermissionsStatus() {
@@ -671,6 +682,7 @@ const unsubscribeShortcutStatus =
 loadInitialConfig().catch((error) => {
   setConfigStatus(error.message || "Could not load configuration.", true);
 });
+loadAppVersion();
 loadPermissionsStatus();
 notifyRendererReady();
 syncRecordingState(false, "idle");

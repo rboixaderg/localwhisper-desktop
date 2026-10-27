@@ -231,6 +231,11 @@ app.on('window-all-closed', () => {
 
 // --- IPC handlers ---
 
+ipcMain.handle('app:get-version', (event) => {
+  validateSender(event);
+  return app.getVersion();
+});
+
 ipcMain.handle('config:load', (event) => {
   validateSender(event);
   return loadConfig();

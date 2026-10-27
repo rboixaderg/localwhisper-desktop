@@ -28,6 +28,12 @@ h2 {
   margin: 0 0 12px;
 }
 
+.app-version {
+  font-size: 14px;
+  font-weight: normal;
+  color: #5e6e66;
+}
+
 .subtitle {
   margin: 0 0 20px;
 }

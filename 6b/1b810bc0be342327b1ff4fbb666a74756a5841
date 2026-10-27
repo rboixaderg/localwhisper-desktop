@@ -1,0 +1,21 @@
+CHANGELOG.md
+  s_d0f1e01fde0aff::t_ebe70a41e7eddb 1-22
+test/glossary-regressions.test.js
+  s_d0f1e01fde0aff::t_4920a34676ff08 7,28,52,227-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6b1b810bc0be342327b1ff4fbb666a74756a5841",
+  "prompts": {},
+  "sessions": {
+    "s_d0f1e01fde0aff": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17ca0-aabc-7783-aec7-8a98b04e1393",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

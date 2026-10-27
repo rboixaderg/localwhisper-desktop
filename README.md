@@ -102,9 +102,11 @@ spells them phonetically in Catalan (`bac em`, `de l'Adlina`). Two layers fix
 this, and both work with **any** model:
 
 **1. Vocabulary prompt** — sent to the decoder as `--prompt <text>`. It biases
-the decoder towards those spellings. Keep the terms you use most first: whisper
-only uses about 224 tokens, and a live counter warns you when you go over
-budget. `Load starter list` fills a generic Catalan + English software
+the decoder towards those spellings. Keep the list short: the app sends at most
+600 characters, and whisper keeps the last ~224 tokens of that submitted text.
+The live counter uses a conservative UTF-8 byte bound, not an exact token count,
+and warns when the prompt may exceed the budget. It can warn even when the real
+count fits. `Load starter list` fills a generic Catalan + English software
 vocabulary that you can then edit. Example:
 
 ```
@@ -311,10 +313,11 @@ npm run generate:tray-icons   # Regenerate tray icons from code
 
 - Transcription depends on the flags available in your `whisper.cpp` binary.
 - By default, `-np -nt` and any args in `Extra args` are appended.
-- The vocabulary prompt is passed as `--prompt <text>` (two separate argv entries, no quoting needed). If you already pass `--prompt` in `Extra args`, that one wins and the field is ignored. whisper.cpp only uses about 224 tokens of it; the UI estimates the count as characters/4.
+- The vocabulary prompt is passed as `--prompt <text>` (two separate argv entries, no quoting needed). If you already pass `--prompt` in `Extra args`, that one wins and the field is ignored. The app keeps the first 600 characters; whisper.cpp keeps the last ~224 tokens of that submitted text. The UI warns using a conservative UTF-8 byte upper bound, not a tokenizer count.
 - Replacements are applied to the final text in `src/main/stt-service.js`, so they also affect automatic paste and the in-app textarea. Matching is whole-word and case-insensitive, longer keys first, and rules are applied in sequence.
-- Glossary limits: 600 characters for the prompt, 4,000 for the rule list, 200 rules, 80 characters per left side, 128 KB per imported file.
+- Glossary limits: 600 characters for the prompt, 4,000 for the rule list, 200 rules, 80 characters per left side, 128 KB per imported file. Oversized replacement lists are rejected on save, export and import, never cut mid-rule. Chained replacements stop with an error above 500,000 output characters or 100,000 matches.
 - See [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for the full mechanics, the IPC contract, and the rejected alternatives.
-- If your binary doesn't support a flag, remove it from `Extra args` or adapt `src/main/stt-service.js`.- Automatic paste is only supported on macOS (uses `osascript` + `System Events`). On Windows/Linux, the transcribed text is placed in the clipboard for manual paste.
+- If your binary doesn't support a flag, remove it from `Extra args` or adapt `src/main/stt-service.js`.
+- Automatic paste is only supported on macOS (uses `osascript` + `System Events`). On Windows/Linux, the transcribed text is placed in the clipboard for manual paste.
 - Audio capture runs in the renderer process via `getUserMedia`, transcription runs in the main process via `spawn`.
 - Recording is limited to 5 minutes to prevent excessive memory usage.

@@ -8,6 +8,8 @@ const MAX_PROMPT_LENGTH = 600;
 const MAX_SUBSTITUTIONS_LENGTH = 4000;
 const MAX_RULES = 200;
 const MAX_RULE_TERM_LENGTH = 80;
+const MAX_SUBSTITUTION_OUTPUT_LENGTH = 500000;
+const MAX_SUBSTITUTION_MATCHES = 100000;
 
 // whisper.cpp uses at most n_text_ctx/2 tokens for the initial prompt.
 const PROMPT_TOKEN_LIMIT = 224;
@@ -84,21 +86,33 @@ function parseSubstitutions(raw) {
   return validateSubstitutions(raw).rules;
 }
 
+function getSubstitutionsLengthError(raw) {
+  return typeof raw === 'string' && raw.trim().length > MAX_SUBSTITUTIONS_LENGTH
+    ? `Replacements exceed the ${MAX_SUBSTITUTIONS_LENGTH}-character limit. Shorten the list before saving or applying it.`
+    : '';
+}
+
 /**
- * Same parsing as parseSubstitutions but also reports why a line was skipped,
- * so the UI can show it instead of silently ignoring user mistakes.
+ * Reports skipped rules. Optional source lines keep import diagnostics tied
+ * to the original file, including references to the first duplicated key.
  */
-function validateSubstitutions(raw) {
+function validateSubstitutions(raw, lineNumbers = []) {
   const rules = [];
   const problems = [];
 
   if (typeof raw !== 'string') return { rules, problems };
 
+  const lengthError = getSubstitutionsLengthError(raw);
+  if (lengthError) {
+    problems.push({ line: 0, text: '', reason: lengthError });
+    return { rules, problems };
+  }
+
   const seen = new Map();
   const lines = raw.split(/\r?\n/);
 
   for (let index = 0; index < lines.length; index++) {
-    const line = index + 1;
+    const line = lineNumbers[index] ?? index + 1;
     const trimmed = lines[index].trim();
 
     if (!trimmed || trimmed.startsWith('#')) continue;
@@ -157,8 +171,8 @@ function validateSubstitutions(raw) {
 
 /**
  * Rough token count for the vocabulary prompt. whisper uses a BPE tokenizer we
- * cannot run here, so we approximate by characters. Good enough to warn the
- * user before the prompt gets silently truncated.
+ * do not bundle here. This legacy characters/4 heuristic remains in the IPC
+ * response for compatibility, but must not drive the UI or budget warnings.
  */
 function estimatePromptTokens(prompt) {
   if (typeof prompt !== 'string') return 0;
@@ -180,6 +194,8 @@ const MAX_GLOSSARY_FILE_LENGTH = 128 * 1024;
 function serializeGlossary({ glossaryPrompt, substitutions }) {
   const prompt = normalizeGlossaryPrompt(glossaryPrompt);
   const rules = typeof substitutions === 'string' ? substitutions.trim() : '';
+  const lengthError = getSubstitutionsLengthError(rules);
+  if (lengthError) throw new Error(lengthError);
 
   return [
     GLOSSARY_FILE_HEADER,
@@ -225,12 +241,12 @@ function parseGlossaryFile(text) {
 
     if (!trimmed || trimmed.startsWith('#')) continue;
 
-    const header = trimmed.match(/^\[([a-z]+)\]$/i);
+    const header = trimmed.match(/^\[([^\]]+)\]$/);
     if (header) {
       const name = header[1].toLowerCase();
+      sawSection = true;
       if (name === 'prompt' || name === 'substitutions') {
         section = name;
-        sawSection = true;
       } else {
         section = null;
         result.problems.push({
@@ -245,16 +261,20 @@ function parseGlossaryFile(text) {
     if (section === 'prompt') {
       promptLines.push(trimmed);
     } else if (section === 'substitutions') {
-      substitutionLines.push(trimmed);
+      substitutionLines.push({ text: trimmed, line });
     } else if (!sawSection) {
-      looseLines.push(trimmed);
+      looseLines.push({ text: trimmed, line });
     }
   }
 
   result.glossaryPrompt = normalizeGlossaryPrompt(promptLines.join('\n'));
-  result.substitutions = (sawSection ? substitutionLines : looseLines).join('\n');
+  const selectedLines = sawSection ? substitutionLines : looseLines;
+  result.substitutions = selectedLines.map((entry) => entry.text).join('\n');
 
-  const { problems } = validateSubstitutions(result.substitutions);
+  const { problems } = validateSubstitutions(
+    result.substitutions,
+    selectedLines.map((entry) => entry.line)
+  );
   for (const problem of problems) {
     result.problems.push(problem);
   }
@@ -275,8 +295,13 @@ function applySubstitutions(text, rules) {
   if (typeof text !== 'string' || !text) return text;
   if (!Array.isArray(rules) || rules.length === 0) return text;
 
+  if (text.length > MAX_SUBSTITUTION_OUTPUT_LENGTH) {
+    throw new Error(`Replacement input exceeds the ${MAX_SUBSTITUTION_OUTPUT_LENGTH}-character limit.`);
+  }
+
   const sorted = [...rules].sort((a, b) => b.from.length - a.from.length);
   let output = text;
+  let matches = 0;
 
   for (const rule of sorted) {
     const body = rule.from
@@ -288,8 +313,18 @@ function applySubstitutions(text, rules) {
     if (!body) continue;
 
     const pattern = new RegExp(`${EDGE_START}${body}${EDGE_END}`, 'giu');
-    // Function replacement so `$&`/`$1` in the right-hand side stay literal.
-    output = output.replace(pattern, () => rule.to);
+    // Check the prospective size before replace allocates the result. Keep
+    // sequential chaining, but bound both its output and total match count.
+    let outputLength = output.length;
+    output = output.replace(pattern, (match) => {
+      matches++;
+      outputLength += rule.to.length - match.length;
+      if (outputLength > MAX_SUBSTITUTION_OUTPUT_LENGTH || matches > MAX_SUBSTITUTION_MATCHES) {
+        throw new Error('Replacement expansion limit exceeded. Simplify the chained rules.');
+      }
+      // Function replacement keeps `$&`/`$1` in the right side literal.
+      return rule.to;
+    });
   }
 
   return output;
@@ -299,6 +334,7 @@ module.exports = {
   normalizeGlossaryPrompt,
   parseSubstitutions,
   validateSubstitutions,
+  getSubstitutionsLengthError,
   applySubstitutions,
   estimatePromptTokens,
   starterPrompt,
@@ -310,5 +346,7 @@ module.exports = {
   PROMPT_TOKEN_LIMIT,
   MAX_PROMPT_LENGTH,
   MAX_SUBSTITUTIONS_LENGTH,
+  MAX_SUBSTITUTION_OUTPUT_LENGTH,
+  MAX_SUBSTITUTION_MATCHES,
   MAX_RULES
 };

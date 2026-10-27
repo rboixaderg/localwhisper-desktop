@@ -272,13 +272,26 @@ ipcMain.handle('glossary:describe', (event, payload) => {
   const prompt = normalizeGlossaryPrompt(input.glossaryPrompt);
   const { rules, problems } = validateSubstitutions(input.substitutions);
   const sample = typeof input.sampleText === 'string' ? input.sampleText.slice(0, 2000) : '';
+  // Whisper's byte-level vocabulary uses at most one token per UTF-8 byte.
+  // This is an upper bound, not an exact count for the configured model.
+  const promptTokenUpperBound = Buffer.byteLength(prompt, 'utf8');
+  let preview = '';
+  let previewError = '';
+  try {
+    preview = sample ? applySubstitutions(sample, rules) : '';
+  } catch (error) {
+    previewError = error.message;
+  }
 
   return {
     ruleCount: rules.length,
     problems,
     promptTokens: estimatePromptTokens(prompt),
+    promptTokenUpperBound,
+    promptMayExceedLimit: promptTokenUpperBound > PROMPT_TOKEN_LIMIT,
     promptTokenLimit: PROMPT_TOKEN_LIMIT,
-    preview: sample ? applySubstitutions(sample, rules) : '',
+    preview,
+    previewError,
     starterPrompt: starterPrompt()
   };
 });
@@ -323,6 +336,8 @@ ipcMain.handle('glossary:import', async (event) => {
 
   const text = await fs.readFile(filePath, 'utf8');
   const parsed = parseGlossaryFile(text);
+  const fatalProblem = parsed.problems.find((problem) => problem.line === 0);
+  if (fatalProblem) throw new Error(fatalProblem.reason);
 
   return { imported: true, path: filePath, ...parsed };
 });

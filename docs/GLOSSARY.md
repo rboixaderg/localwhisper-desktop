@@ -78,9 +78,17 @@ already knows. That distinction explains every limitation below.
 ### 3.2 Budget and truncation
 
 whisper.cpp uses at most `n_text_ctx / 2` tokens for the initial prompt, which
-is **224 tokens** for the models this app targets. Anything beyond that is
-dropped silently, so the order matters: put your most frequent terms first.
-The UI shows an estimate (`characters / 4`) and turns red above the limit.
+is **224 tokens** for the models this app targets. It retains the **end** of an
+overflowing prompt, not the beginning. Keep the list short rather than putting
+important terms first. Separately, the app caps the normalized prompt at its
+first 600 characters before sending it.
+
+The UI uses the submitted prompt's UTF-8 byte length as a conservative token
+upper bound. Byte-level tokenization cannot need more tokens than input bytes.
+The warning turns red when that bound exceeds 224. This detects token-dense
+lists such as `X0, X1, ...` even below 600 characters, but can also warn for
+prompts whose real token count fits. It is not an exact tokenizer count and
+does not need a bundled model vocabulary.
 
 ### 3.3 What it cannot do
 
@@ -141,10 +149,19 @@ Because it is whole-word, `desbord => dashboard` leaves `desbordament` alone.
 | Limit | Value | Enforced in |
 | --- | --- | --- |
 | Prompt length | 600 characters | `sanitizeConfig` |
-| Replacements length | 4,000 characters | `sanitizeConfig` |
+| Replacements length | 4,000 characters | Shared validation; save, import and export reject excess |
 | Rules per list | 200 | `validateSubstitutions` |
 | Left side length | 80 characters | `validateSubstitutions` |
 | Imported file size | 128 KB | `main.js` (`fs.stat` before read) |
+| Replacement input/output length, with active rules | 500,000 characters | `applySubstitutions`, before allocating an oversized result |
+| Replacement matches | 100,000 across the whole chain | `applySubstitutions` |
+
+Replacement lists are never truncated at a character boundary. Loading an
+oversized externally edited configuration preserves the text for repair, but
+validation disables the entire list until it fits. Saving rejects it without
+overwriting the existing configuration. Preview uses the same validation.
+Expansion failures appear as preview errors or transcription errors, never as
+a partially corrected transcript.
 
 ### 4.3 What it cannot do
 
@@ -204,10 +221,14 @@ Parser behaviour:
 - CRLF (Windows) and LF both work.
 - A file **without sections** is treated as a plain rule list, so pasting a
   rules file around works with no ceremony.
-- An unknown section (e.g. `[modelos]`) is reported with its line number and
-  skipped; the rest of the file still loads.
-- Invalid rules are reported line by line; the valid ones still load.
-- Empty or larger-than-128 KB files are rejected.
+- An unknown section (e.g. `[modelos]`) is reported with its original line
+  number. Its contents are skipped until a known section starts, even if no
+  known section precedes it.
+- Invalid rules are reported with original file line numbers, including
+  comments, blank lines and headers. Duplicate diagnostics also refer to the
+  original first occurrence. Valid rules still load.
+- Empty or larger-than-128 KB files, and replacement lists exceeding 4,000
+  characters, are rejected without replacing the current fields.
 - Import **fills the fields but never saves**: you still press
   `Save Configuration`.
 
@@ -230,15 +251,22 @@ Response:
   "ruleCount": 1,
   "problems": [{ "line": 3, "text": "Pipalina", "reason": "missing separator (use =>, -> or =)" }],
   "promptTokens": 5,
+  "promptTokenUpperBound": 18,
+  "promptMayExceedLimit": false,
   "promptTokenLimit": 224,
   "preview": "el backend",
+  "previewError": "",
   "starterPrompt": "Kubernetes, deploy, release, ..."
 }
 ```
 
-`promptTokens` is a `characters / 4` estimate, not a real BPE count: whisper's
-tokenizer is not available in the app. It is accurate enough to warn before
-silent truncation, not to optimise a prompt to the last token.
+`promptTokens` remains a rough `characters / 4` estimate for IPC compatibility.
+It does not drive the UI or warnings. The UI displays `promptTokenUpperBound`,
+the UTF-8 byte length of the normalized submitted prompt, and warns when
+`promptMayExceedLimit` is true. Neither field is an exact BPE count.
+`previewError` reports bounded-expansion failures without losing the other
+validation feedback. A problem with `line: 0` applies to the whole input,
+not to a particular line.
 
 ## 8. Measured behaviour
 
@@ -260,7 +288,7 @@ qualitative (unusable → usable), not a WER benchmark.
 | --- | --- | --- |
 | Prompt has no effect | Catalan-only fine-tune | Use a multilingual model (`large-v3`, `large-v3-turbo`) |
 | Prompt has partial effect | Model too small (turbo) | Use `large-v3`, or cover the rest with rules |
-| Token counter is red | Over 224 tokens | Reorder: most frequent first, delete the rest |
+| Token warning is red | Conservative bound exceeds 224; actual count may be lower | Shorten the list; whisper retains the end if it overflows |
 | A rule never fires | Left side does not match the actual output | Copy the wrong text from a real transcript |
 | A rule fires too often | Left side is a common word | Use a more specific key, or delete the rule |
 | Text changes that you did not want | Rule applied to legitimate text | Remove the rule; there is no context detection |
@@ -285,7 +313,8 @@ qualitative (unusable → usable), not a WER benchmark.
 | `normalizeGlossaryPrompt` | separators, quotes, length cap |
 | `parseSubstitutions` / `validateSubstitutions` | syntax, comments, duplicates, reported line numbers |
 | `applySubstitutions` | whole words, case folding, multi-word keys, ordering, `$` literalness |
-| `estimatePromptTokens` / `starterPrompt` | budget accuracy, starter list stays generic and under the cap |
+| `estimatePromptTokens` / `starterPrompt` | heuristic behaviour, starter list stays generic and under the character cap |
+| `glossary-regressions.test.js` | oversized-list rejection, bounded chaining, original file lines, unknown-section isolation, token-dense prompt warnings, preview error feedback |
 | `serializeGlossary` / `parseGlossaryFile` | round-trip, CRLF, headerless files, unknown sections, size guard |
 | `buildArgs` | prompt passed as two argv entries, not duplicated, language flag |
 | `sanitizeConfig glossary fields` | defaults, normalization, caps, non-string input |

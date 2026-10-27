@@ -4,7 +4,7 @@ const { app } = require('electron');
 const {
   normalizeGlossaryPrompt,
   MAX_PROMPT_LENGTH,
-  MAX_SUBSTITUTIONS_LENGTH
+  getSubstitutionsLengthError
 } = require('../shared/glossary');
 
 const DEFAULT_CONFIG = {
@@ -46,8 +46,12 @@ function sanitizeConfig(config, strict = false) {
   const glossaryPrompt = normalizeGlossaryPrompt(merged.glossaryPrompt).slice(0, MAX_PROMPT_LENGTH);
 
   const substitutions = typeof merged.substitutions === 'string'
-    ? merged.substitutions.trim().slice(0, MAX_SUBSTITUTIONS_LENGTH)
+    ? merged.substitutions.trim()
     : '';
+  const substitutionsError = getSubstitutionsLengthError(substitutions);
+  if (strict && substitutionsError) throw new Error(substitutionsError);
+  // Preserve oversized external/legacy lists on load for repair. The shared
+  // validator disables them, so no partial rule can reach transcription.
 
   return {
     whisperBinPath,

@@ -474,9 +474,10 @@ describe('sanitizeConfig glossary fields', () => {
     assert.strictEqual(result.glossaryPrompt, 'Kubernetes, deploy');
   });
 
-  it('caps the substitutions field', () => {
-    const result = sanitizeConfig({ substitutions: 'a => b\n'.repeat(2000) });
-    assert.ok(result.substitutions.length <= 4000);
+  it('rejects oversized substitutions on save without truncating them on load', () => {
+    const substitutions = 'a => b\n'.repeat(2000).trim();
+    assert.throws(() => sanitizeConfig({ substitutions }, true), /4000/);
+    assert.strictEqual(sanitizeConfig({ substitutions }).substitutions, substitutions);
   });
 
   it('ignores non-string glossary fields', () => {
@@ -548,7 +549,7 @@ describe('estimatePromptTokens', () => {
     assert.ok(long > short);
   });
 
-  it('keeps the starter list under the token limit', () => {
+  it('reports a heuristic below the token limit for the starter list', () => {
     assert.ok(estimatePromptTokens(starterPrompt()) < PROMPT_TOKEN_LIMIT);
   });
 });

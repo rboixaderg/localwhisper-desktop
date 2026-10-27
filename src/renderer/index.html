@@ -42,7 +42,7 @@
           <span id="glossaryFileStatus" class="status"></span>
         </div>
         <textarea id="glossaryPrompt" class="compact" rows="3" placeholder="Kubernetes, deploy, pull request, deadline, roadmap, Notion"></textarea>
-        <p class="hint">Sent to the model as the initial prompt. Put the terms you use most first: whisper only uses about 224 tokens. Generated automatically with <code>--prompt</code>.</p>
+        <p class="hint">Sent with <code>--prompt</code>, capped at 600 characters by the app. Keep the list short: whisper keeps the last ~224 tokens of the submitted prompt. The token bound is conservative, not an exact count.</p>
 
         <label>Replacements after transcription (one per line: wrong =&gt; right)</label>
         <textarea id="substitutions" class="compact" rows="4" placeholder="bac em => backend&#10;buquet d'estagint => bucket de staging&#10;# lines starting with # are ignored"></textarea>

@@ -200,19 +200,21 @@ async function refreshGlossaryFeedback() {
     return;
   }
 
-  const tokens = info.promptTokens || 0;
+  const upperBound = info.promptTokenUpperBound || 0;
   const limit = info.promptTokenLimit || 224;
-  domElements.promptStatus.textContent = tokens
-    ? `~${tokens} / ${limit} tokens`
+  const mayExceedLimit = info.promptMayExceedLimit;
+  domElements.promptStatus.textContent = upperBound
+    ? `Up to ${upperBound} tokens (conservative bound)` +
+      (mayExceedLimit ? ` · may exceed ${limit}; shorten the list` : "")
     : "";
-  domElements.promptStatus.style.color = tokens > limit ? "#9f1d1d" : "#1f7a5a";
+  domElements.promptStatus.style.color = mayExceedLimit ? "#9f1d1d" : "#1f7a5a";
 
   const rules = info.ruleCount || 0;
   const problems = info.problems || [];
   const parts = [`${rules} rule${rules === 1 ? "" : "s"} active`];
   if (problems.length) {
     parts.push(
-      `${problems.length} line${problems.length === 1 ? "" : "s"} ignored`,
+      `${problems.length} problem${problems.length === 1 ? "" : "s"}`,
     );
   }
   domElements.rulesStatus.textContent = rules || problems.length ? parts.join(" \u00b7 ") : "";
@@ -221,7 +223,9 @@ async function refreshGlossaryFeedback() {
   domElements.rulesProblems.replaceChildren();
   for (const problem of problems.slice(0, 10)) {
     const item = document.createElement("li");
-    item.textContent = `line ${problem.line}: ${problem.reason}`;
+    item.textContent = problem.line
+      ? `line ${problem.line}: ${problem.reason}`
+      : problem.reason;
     domElements.rulesProblems.appendChild(item);
   }
 
@@ -229,8 +233,9 @@ async function refreshGlossaryFeedback() {
   const sample = domElements.previewInput.value.trim();
   domElements.previewOutput.hidden = !sample;
   domElements.previewOutput.textContent = sample
-    ? preview || sample
+    ? info.previewError || preview || sample
     : "";
+  domElements.previewOutput.style.color = info.previewError ? "#9f1d1d" : "";
 }
 
 function loadStarterVocabulary() {
@@ -336,6 +341,7 @@ async function saveConfig() {
     const config = getConfigFromUi();
     const savedConfig = await window.localWhisperApi.saveConfig(config);
     setConfigToUi(savedConfig);
+    await refreshGlossaryFeedback();
     setConfigStatus("Configuration saved.");
 
     await window.localWhisperApi.registerShortcut(savedConfig.shortcut);

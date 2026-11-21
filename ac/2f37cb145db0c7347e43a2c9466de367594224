@@ -1,0 +1,33 @@
+CHANGELOG.md
+  s_5f08cb4ccd6c58::t_aa79af701ac6db 8
+README.md
+  s_5f08cb4ccd6c58::t_e1f2b5de8b1cfd 161-166
+src/main/benchmark-store.js
+  s_5f08cb4ccd6c58::t_d512ab0720d6e4 111-127,353
+src/main/main.js
+  s_5f08cb4ccd6c58::t_f8561a8ea494ee 6,39,304-313
+src/main/preload.js
+  s_5f08cb4ccd6c58::t_4223f4dfa29973 31
+src/renderer/benchmarks.js
+  s_5f08cb4ccd6c58::t_37ad1346d0b1d4 13-14,100-101,302-305
+src/renderer/index.html
+  s_5f08cb4ccd6c58::t_70bb233b34f079 95,99
+test/benchmarks.test.js
+  s_5f08cb4ccd6c58::t_6c1aed89922baa 15,150-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ac2f37cb145db0c7347e43a2c9466de367594224",
+  "prompts": {},
+  "sessions": {
+    "s_5f08cb4ccd6c58": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1fd3c-085d-739e-a856-40eae4e39e92",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

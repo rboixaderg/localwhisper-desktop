@@ -1,0 +1,31 @@
+docs/GLOSSARY.md
+  s_d4747deaeffc24::t_c7af4a2422541e 33,177-180
+src/main/benchmark-store.js
+  s_7158699f558f84::t_8f6981704b2cac 62-93,96,105,138-145
+src/renderer/benchmarks.js
+  s_d4747deaeffc24::t_91e931e0c0c8c4 34,67-70,73,77-88,96-101,133,145,154,234,252,257,271-272,274,284-285,287,295,298,307,310
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "198de8e7c4877574104af2f09217a77c17ae0dca",
+  "prompts": {},
+  "sessions": {
+    "s_7158699f558f84": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1fd21-3ad5-75f9-a86e-7fe687c730d0",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    },
+    "s_d4747deaeffc24": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_e02ba8b48ffejqR1WgFNjosqk2",
+        "model": "unknown"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

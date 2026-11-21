@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { parseExtraArgs } = require('./stt-service');
 
 /**
  * Local storage for saved dictations ("benchmarks").
@@ -97,11 +98,14 @@ function redactExtraArgs(raw) {
   const out = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
-    const eq = token.indexOf('=');
-    if (token.startsWith('-') && eq > 0 && SECRET_FLAG_PATTERN.test(token.slice(0, eq))) {
-      out.push(`${token.slice(0, eq)}=[redacted]`);
-    } else if (token.startsWith('-') && SECRET_FLAG_PATTERN.test(token) && eq < 0) {
-      out.push(token);
+    // Match the same unquoted argument that Whisper receives, including when
+    // the option name or the complete argument was quoted.
+    const normalized = parseExtraArgs(token)[0] || '';
+    const eq = normalized.indexOf('=');
+    if (normalized.startsWith('-') && eq > 0 && SECRET_FLAG_PATTERN.test(normalized.slice(0, eq))) {
+      out.push(`${normalized.slice(0, eq)}=[redacted]`);
+    } else if (normalized.startsWith('-') && SECRET_FLAG_PATTERN.test(normalized) && eq < 0) {
+      out.push(normalized);
       if (i + 1 < tokens.length) {
         out.push('[redacted]');
         i += 1;

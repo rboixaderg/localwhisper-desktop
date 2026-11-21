@@ -230,11 +230,11 @@
     return el('div', { className: 'run-card' }, children);
   }
 
-  function render(meta) {
+  function render(meta, preserveReference = false) {
     selectedHasRawText = meta.runs.some((r) => typeof r.rawText === 'string');
     els.title.textContent =
       `${formatDate(meta.createdAt)} · ${formatDuration(meta.durationMs)} · ${meta.language} · ${meta.source}`;
-    els.reference.value = meta.reference ? meta.reference.text : '';
+    if (!preserveReference) els.reference.value = meta.reference ? meta.reference.text : '';
 
     const numbers = new Map(meta.runs.map((r, i) => [r.id, i + 1]));
     els.runs.replaceChildren();
@@ -253,12 +253,14 @@
   }
 
   async function openDictation(id, keepStatus = false) {
+    const changingSelection = selectedId !== id;
+    if (changingSelection) els.detail.hidden = true;
     selectedId = id;
     syncSelectionHighlight();
     const meta = await api.getBenchmark(id);
     if (selectedId !== id) return;
     els.detail.hidden = false;
-    render(meta);
+    render(meta, keepStatus && !changingSelection);
     if (!keepStatus) setStatus('');
     if (audioForId !== id) await loadAudio(id);
   }

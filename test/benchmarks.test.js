@@ -188,6 +188,12 @@ describe('settings summary', () => {
     assert.equal(redactExtraArgs('--prompt "hello world" -t 4'), '--prompt "hello world" -t 4');
   });
 
+  it('redacts secret flags whose names or entire arguments are quoted', () => {
+    assert.equal(redactExtraArgs('"--api-key=SECRET" -t 4'), '--api-key=[redacted] -t 4');
+    assert.equal(redactExtraArgs('"--token" "my secret" -t 4'), '--token [redacted] -t 4');
+    assert.equal(redactExtraArgs('--"api-key"=SECRET'), '--api-key=[redacted]');
+  });
+
   it('redacts quoted secret values and values starting with a dash', () => {
     assert.equal(redactExtraArgs('--api-key "my secret value" -t 4'), '--api-key [redacted] -t 4');
     assert.equal(redactExtraArgs("--token='a b c' -t 4"), '--token=[redacted] -t 4');
@@ -489,6 +495,38 @@ describe('benchmarks UI regressions', () => {
   }
 
   const flush = () => new Promise((resolve) => setTimeout(resolve, 15));
+
+  it('hides the previous detail while a newly selected dictation is loading or fails', async () => {
+    let rejectLoad;
+    const { getEl } = mountBenchmarksUi({
+      getBenchmark: async (id) => id.endsWith('bbbbbbbb')
+        ? new Promise((_, reject) => { rejectLoad = reject; })
+        : { id, createdAt: '2026-01-01', runs: [], reference: null }
+    });
+    await flush();
+    getEl('benchmarkList').children[0].listeners.get('click')();
+    await flush();
+    getEl('benchmarkList').children[1].listeners.get('click')();
+    assert.equal(getEl('benchmarkDetail').hidden, true);
+    rejectLoad(new Error('load failed'));
+    await flush();
+    assert.equal(getEl('benchmarkDetail').hidden, true);
+  });
+
+  it('preserves a draft on the same dictation when retranscription finishes', async () => {
+    let resolveRetranscribe;
+    const { getEl } = mountBenchmarksUi({
+      retranscribeBenchmark: () => new Promise((resolve) => { resolveRetranscribe = resolve; })
+    });
+    await flush();
+    getEl('benchmarkList').children[0].listeners.get('click')();
+    await flush();
+    getEl('retranscribeBenchmark').listeners.get('click')();
+    getEl('benchmarkReference').value = 'draft in progress';
+    resolveRetranscribe({ id: '99999999' });
+    await flush();
+    assert.equal(getEl('benchmarkReference').value, 'draft in progress');
+  });
 
   it('keeps the newly selected dictation and draft reference when an in-flight retranscribe finishes', async () => {
     let resolveRetranscribe;

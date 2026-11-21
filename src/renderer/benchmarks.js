@@ -31,6 +31,7 @@
   };
 
   let selectedId = null;
+  let selectedHasRawText = false;
   let audioUrl = null;
   let audioForId = null;
   let busy = false;
@@ -63,17 +64,28 @@
     return node;
   }
 
-  function setBusy(value) {
-    busy = value;
-    for (const button of [els.reprocess, els.retranscribe, els.remove, els.saveReference, els.deleteAll]) {
-      button.disabled = value;
+  function syncButtons() {
+    els.reprocess.disabled = busy || !selectedHasRawText;
+    for (const button of [els.retranscribe, els.remove, els.saveReference, els.deleteAll]) {
+      button.disabled = busy;
     }
     for (const button of els.runs.querySelectorAll('button')) {
-      button.disabled = value;
+      button.disabled = busy;
     }
   }
 
-  async function run(label, task) {
+  function setBusy(value) {
+    busy = value;
+    syncButtons();
+  }
+
+  function syncSelectionHighlight() {
+    for (const li of els.list.children || []) {
+      li.className = li.dataset && li.dataset.id === selectedId ? 'selected' : '';
+    }
+  }
+
+  async function run(label, task, targetId = null) {
     if (busy) return;
     setBusy(true);
     setStatus(label);
@@ -81,8 +93,12 @@
       await task();
     } catch (error) {
       setStatus(error.message || 'Operation failed.', true);
-      // A failed run is stored too; show it.
-      if (selectedId) await openDictation(selectedId, true).catch(() => {});
+      // A failed run is stored too; refresh the view without clobbering a
+      // different dictation the user switched to while this run was in flight.
+      if (targetId && selectedId === targetId) {
+        await openDictation(targetId, true).catch(() => {});
+      }
+      await refresh();
     } finally {
       setBusy(false);
     }
@@ -114,6 +130,7 @@
           text: `${item.runCount} run${item.runCount === 1 ? '' : 's'}${item.hasReference ? ' · reference' : ''}${item.preview ? ' · ' + item.preview : ''}`
         })
       ]);
+      li.dataset.id = item.id;
       li.addEventListener('click', () => {
         openDictation(item.id).catch((error) => setStatus(error.message, true));
       });
@@ -125,6 +142,7 @@
 
   function closeDetail() {
     selectedId = null;
+    selectedHasRawText = false;
     els.detail.hidden = true;
     els.runs.replaceChildren();
     if (audioUrl) {
@@ -133,6 +151,7 @@
     }
     els.audio.removeAttribute('src');
     audioForId = null;
+    syncButtons();
   }
 
   function base64ToBlob(base64, type) {
@@ -212,6 +231,7 @@
   }
 
   function render(meta) {
+    selectedHasRawText = meta.runs.some((r) => typeof r.rawText === 'string');
     els.title.textContent =
       `${formatDate(meta.createdAt)} · ${formatDuration(meta.durationMs)} · ${meta.language} · ${meta.source}`;
     els.reference.value = meta.reference ? meta.reference.text : '';
@@ -229,17 +249,18 @@
       );
     }
     meta.runs.forEach((r, i) => els.runs.appendChild(runCard(r, i, numbers)));
+    syncButtons();
   }
 
   async function openDictation(id, keepStatus = false) {
     selectedId = id;
+    syncSelectionHighlight();
     const meta = await api.getBenchmark(id);
     if (selectedId !== id) return;
     els.detail.hidden = false;
     render(meta);
     if (!keepStatus) setStatus('');
     if (audioForId !== id) await loadAudio(id);
-    await refresh();
   }
 
   function reprocess(runId) {
@@ -247,9 +268,10 @@
     if (!id) return Promise.resolve();
     return run('Reprocessing the saved raw text…', async () => {
       await api.reprocessBenchmark(id, runId);
-      await openDictation(id, true);
+      if (selectedId === id) await openDictation(id, true);
+      await refresh();
       setStatus('Reprocessed. Saved as a new run.');
-    });
+    }, id);
   }
 
   els.reprocess.addEventListener('click', () => reprocess());
@@ -259,9 +281,10 @@
     if (!id) return;
     run('Transcribing the saved audio…', async () => {
       await api.retranscribeBenchmark(id);
-      await openDictation(id, true);
+      if (selectedId === id) await openDictation(id, true);
+      await refresh();
       setStatus('Transcribed again. Saved as a new run.');
-    });
+    }, id);
   });
 
   els.saveReference.addEventListener('click', () => {
@@ -269,10 +292,10 @@
     if (!id) return;
     run('Saving reference…', async () => {
       const meta = await api.setBenchmarkReference(id, els.reference.value);
-      render(meta);
+      if (selectedId === id) render(meta);
       await refresh();
       setStatus(meta.reference ? 'Reference saved.' : 'Reference removed.');
-    });
+    }, id);
   });
 
   els.remove.addEventListener('click', () => {
@@ -281,10 +304,10 @@
     if (!window.confirm('Delete this dictation, its audio and all its runs? This cannot be undone.')) return;
     run('Deleting…', async () => {
       await api.deleteBenchmark(id);
-      closeDetail();
+      if (selectedId === id) closeDetail();
       await refresh();
       setStatus('Dictation deleted.');
-    });
+    }, id);
   });
 
   els.deleteAll.addEventListener('click', () => {

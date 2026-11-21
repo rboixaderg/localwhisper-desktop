@@ -292,9 +292,30 @@ ipcMain.handle('stt:transcribe', async (event, payload) => {
   }
   const config = await loadConfig();
   const source = ['manual', 'shortcut', 'tray'].includes(payload.source) ? payload.source : 'unknown';
-  const { service } = getBenchmarks();
+
   // Returns { text, rawText, benchmarkId, benchmarkError }. Nothing is saved
-  // unless "Save dictations for benchmarks" is enabled.
+  // unless "Save dictations for benchmarks" is enabled, and a bad benchmark
+  // folder configuration must never block live dictation.
+  if (config.saveBenchmarks !== true) {
+    const rawText = await stt.transcribeRaw({ audioBase64: payload.audioBase64, config });
+    const text = stt.applyPostProcessing(rawText, config);
+    return { text, rawText, benchmarkId: null, benchmarkError: '' };
+  }
+
+  let service;
+  try {
+    ({ service } = getBenchmarks());
+  } catch (error) {
+    const rawText = await stt.transcribeRaw({ audioBase64: payload.audioBase64, config });
+    const text = stt.applyPostProcessing(rawText, config);
+    return {
+      text,
+      rawText,
+      benchmarkId: null,
+      benchmarkError: error.message || 'Could not initialize saved dictations.'
+    };
+  }
+
   return service.dictate({ audioBase64: payload.audioBase64, source, config });
 });
 

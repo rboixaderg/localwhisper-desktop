@@ -59,9 +59,41 @@ function wavDurationMs(buffer) {
   return null;
 }
 
+function splitArgTokens(raw) {
+  const tokens = [];
+  let current = '';
+  let inQuote = false;
+  let quoteChar = '';
+
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (inQuote) {
+      current += ch;
+      if (ch === quoteChar) {
+        inQuote = false;
+        quoteChar = '';
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true;
+      quoteChar = ch;
+      current += ch;
+    } else if (/\s/.test(ch)) {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current) tokens.push(current);
+  return tokens;
+}
+
 function redactExtraArgs(raw) {
   if (typeof raw !== 'string' || !raw.trim()) return '';
-  const tokens = raw.trim().split(/\s+/);
+  const tokens = splitArgTokens(raw.trim());
   const out = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
@@ -70,7 +102,7 @@ function redactExtraArgs(raw) {
       out.push(`${token.slice(0, eq)}=[redacted]`);
     } else if (token.startsWith('-') && SECRET_FLAG_PATTERN.test(token) && eq < 0) {
       out.push(token);
-      if (i + 1 < tokens.length && !tokens[i + 1].startsWith('-')) {
+      if (i + 1 < tokens.length) {
         out.push('[redacted]');
         i += 1;
       }
@@ -103,9 +135,14 @@ function summarizeConfig(config) {
 }
 
 async function writeJsonAtomic(file, value) {
-  const tmp = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8');
-  await fs.rename(tmp, file);
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8');
+    await fs.rename(tmp, file);
+  } catch (error) {
+    await fs.rm(tmp, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 /**

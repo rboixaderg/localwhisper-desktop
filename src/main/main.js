@@ -2,7 +2,9 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { app, BrowserWindow, ipcMain, dialog, systemPreferences, globalShortcut, shell } = require('electron');
 const { loadConfig, saveConfig } = require('./config-store');
-const { transcribeAudio } = require('./stt-service');
+const stt = require('./stt-service');
+const { createBenchmarkStore, ID_PATTERN } = require('./benchmark-store');
+const { createBenchmarkService } = require('./benchmark-service');
 const {
   normalizeGlossaryPrompt,
   validateSubstitutions,
@@ -28,6 +30,27 @@ let isRecording = false;
 let recordingPhase = 'idle';
 let quitRequested = false;
 let shortcutStatus = { registered: false, accelerator: '', error: '' };
+let benchmarks = null;
+
+// Created lazily so the userData path is only resolved once the app is ready.
+function getBenchmarks() {
+  if (!benchmarks) {
+    const store = createBenchmarkStore({
+      rootDir: path.join(app.getPath('userData'), 'benchmarks'),
+      appVersion: app.getVersion()
+    });
+    benchmarks = { store, service: createBenchmarkService({ store, stt }) };
+  }
+  return benchmarks;
+}
+
+function requireDictationId(payload) {
+  const id = payload && payload.id;
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) {
+    throw new Error('Invalid dictation id.');
+  }
+  return id;
+}
 
 function validateSender(event) {
   if (!event.senderFrame) return;
@@ -268,7 +291,58 @@ ipcMain.handle('stt:transcribe', async (event, payload) => {
     throw new Error('Audio data too large. Maximum recording duration is 5 minutes.');
   }
   const config = await loadConfig();
-  return transcribeAudio({ audioBase64: payload.audioBase64, config });
+  const source = ['manual', 'shortcut', 'tray'].includes(payload.source) ? payload.source : 'unknown';
+  const { service } = getBenchmarks();
+  // Returns { text, rawText, benchmarkId, benchmarkError }. Nothing is saved
+  // unless "Save dictations for benchmarks" is enabled.
+  return service.dictate({ audioBase64: payload.audioBase64, source, config });
+});
+
+ipcMain.handle('benchmarks:list', async (event) => {
+  validateSender(event);
+  const { store } = getBenchmarks();
+  return { dictations: await store.list(), usage: await store.usage() };
+});
+
+ipcMain.handle('benchmarks:get', async (event, payload) => {
+  validateSender(event);
+  return getBenchmarks().store.getDictation(requireDictationId(payload));
+});
+
+ipcMain.handle('benchmarks:get-audio', async (event, payload) => {
+  validateSender(event);
+  const audio = await getBenchmarks().store.getAudio(requireDictationId(payload));
+  return audio.toString('base64');
+});
+
+ipcMain.handle('benchmarks:reprocess', async (event, payload) => {
+  validateSender(event);
+  const id = requireDictationId(payload);
+  const config = await loadConfig();
+  return getBenchmarks().service.reprocess(id, payload.runId, config);
+});
+
+ipcMain.handle('benchmarks:retranscribe', async (event, payload) => {
+  validateSender(event);
+  const id = requireDictationId(payload);
+  const config = await loadConfig();
+  return getBenchmarks().service.retranscribe(id, config);
+});
+
+ipcMain.handle('benchmarks:set-reference', async (event, payload) => {
+  validateSender(event);
+  const id = requireDictationId(payload);
+  return getBenchmarks().store.setReference(id, payload.text);
+});
+
+ipcMain.handle('benchmarks:delete', async (event, payload) => {
+  validateSender(event);
+  return getBenchmarks().store.remove(requireDictationId(payload));
+});
+
+ipcMain.handle('benchmarks:delete-all', async (event) => {
+  validateSender(event);
+  return getBenchmarks().store.removeAll();
 });
 
 ipcMain.handle('glossary:describe', (event, payload) => {

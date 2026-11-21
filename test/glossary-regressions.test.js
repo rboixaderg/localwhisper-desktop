@@ -34,6 +34,7 @@ function mainHandlers(fileText) {
       readFile: async () => fileText
     },
     './config-store': {}, './stt-service': {}, './paste-service': {},
+    './benchmark-store': { ID_PATTERN: /^x$/ }, './benchmark-service': {},
     './tray-manager': {}, './overlay-window': {}, '../shared/glossary': glossary
   });
   return handlers;

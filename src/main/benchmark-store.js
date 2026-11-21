@@ -108,6 +108,23 @@ async function writeJsonAtomic(file, value) {
   await fs.rename(tmp, file);
 }
 
+/**
+ * Folder that holds saved dictations: `<LOCALWHISPER_DATA_DIR>/benchmarks`
+ * when that variable is an absolute path, otherwise `<userData>/benchmarks`.
+ * A relative value is rejected instead of being resolved against an
+ * unpredictable working directory.
+ */
+function resolveBenchmarksDir({ userDataDir, env = process.env }) {
+  const override = typeof env.LOCALWHISPER_DATA_DIR === 'string' ? env.LOCALWHISPER_DATA_DIR.trim() : '';
+  if (override) {
+    if (!path.isAbsolute(override)) {
+      throw new Error('LOCALWHISPER_DATA_DIR must be an absolute path.');
+    }
+    return path.join(override, 'benchmarks');
+  }
+  return path.join(userDataDir, 'benchmarks');
+}
+
 function createBenchmarkStore({ rootDir, appVersion = '' }) {
   if (!rootDir || typeof rootDir !== 'string') {
     throw new Error('rootDir is required.');
@@ -333,6 +350,7 @@ function createBenchmarkStore({ rootDir, appVersion = '' }) {
 
 module.exports = {
   createBenchmarkStore,
+  resolveBenchmarksDir,
   summarizeConfig,
   redactExtraArgs,
   wavDurationMs,

@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('localWhisperApi', {
   transcribe: (audioBase64, source) =>
     ipcRenderer.invoke('stt:transcribe', { audioBase64, source }),
   listBenchmarks: () => ipcRenderer.invoke('benchmarks:list'),
+  openBenchmarksFolder: () => ipcRenderer.invoke('benchmarks:open-folder'),
   getBenchmark: (id) => ipcRenderer.invoke('benchmarks:get', { id }),
   getBenchmarkAudio: (id) => ipcRenderer.invoke('benchmarks:get-audio', { id }),
   reprocessBenchmark: (id, runId) =>

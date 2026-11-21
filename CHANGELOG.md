@@ -5,7 +5,7 @@
 ### Added
 
 - Opt-in **Save dictations for benchmarks** setting (off by default) that keeps the audio (WAV), raw Whisper transcript and final text of each completed dictation on the device.
-- Saved dictations panel: reprocess the raw text with the current rules, re-transcribe the saved audio, compare runs side by side, add a manual reference transcript, and delete one or all dictations with disk usage shown.
+- Saved dictations panel: reprocess the raw text with the current rules, re-transcribe the saved audio, compare runs side by side, add a manual reference transcript, and delete one or all dictations with disk usage shown. The panel shows the storage location and can open it; `LOCALWHISPER_DATA_DIR` overrides the base folder.
 
 ### Changed
 

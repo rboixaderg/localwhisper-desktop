@@ -92,9 +92,11 @@
         <p class="hint warn">Stored only on this device, in LocalWhisper's data folder, and never sent over the network. Recordings can contain private information. Dictations are never deleted automatically.</p>
         <div class="row">
           <span id="benchmarkUsage" class="status"></span>
+          <button id="openBenchmarksFolder">Open folder</button>
           <button id="refreshBenchmarks">Refresh</button>
           <button id="deleteAllBenchmarks" class="danger">Delete all saved dictations</button>
         </div>
+        <p class="hint">Location: <code id="benchmarkDirectory">-</code></p>
         <span id="benchmarkStatus" class="status"></span>
         <ul id="benchmarkList" class="benchmark-list"></ul>
 

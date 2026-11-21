@@ -10,6 +10,8 @@
     status: $('benchmarkStatus'),
     list: $('benchmarkList'),
     refresh: $('refreshBenchmarks'),
+    openFolder: $('openBenchmarksFolder'),
+    directory: $('benchmarkDirectory'),
     deleteAll: $('deleteAllBenchmarks'),
     detail: $('benchmarkDetail'),
     title: $('benchmarkTitle'),
@@ -95,7 +97,8 @@
       return;
     }
 
-    const { dictations, usage } = result;
+    const { dictations, usage, directory } = result;
+    els.directory.textContent = directory || '-';
     els.usage.textContent = usage.count
       ? `${usage.count} saved dictation${usage.count === 1 ? '' : 's'} · ${formatBytes(usage.bytes)} on disk`
       : 'No saved dictations';
@@ -295,6 +298,10 @@
   });
 
   els.refresh.addEventListener('click', refresh);
+
+  els.openFolder.addEventListener('click', () => {
+    api.openBenchmarksFolder().catch((error) => setStatus(error.message || 'Could not open the folder.', true));
+  });
 
   window.benchmarksUi = { refresh };
   refresh();

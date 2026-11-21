@@ -12,7 +12,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const { createBenchmarkStore, summarizeConfig, redactExtraArgs, wavDurationMs } = require('../src/main/benchmark-store');
+const { createBenchmarkStore, resolveBenchmarksDir, summarizeConfig, redactExtraArgs, wavDurationMs } = require('../src/main/benchmark-store');
 const { createBenchmarkService } = require('../src/main/benchmark-service');
 const { applyPostProcessing } = require('../src/main/stt-service');
 const { sanitizeConfig, DEFAULT_CONFIG } = require('../src/main/config-store');
@@ -144,6 +144,27 @@ describe('benchmark store', () => {
   it('parses WAV durations and tolerates garbage', () => {
     assert.equal(wavDurationMs(wavBuffer(3)), 3000);
     assert.equal(wavDurationMs(Buffer.from('nope')), null);
+  });
+});
+
+describe('resolveBenchmarksDir', () => {
+  it('defaults to <userData>/benchmarks', () => {
+    assert.equal(resolveBenchmarksDir({ userDataDir: '/ud', env: {} }), path.join('/ud', 'benchmarks'));
+    assert.equal(resolveBenchmarksDir({ userDataDir: '/ud', env: { LOCALWHISPER_DATA_DIR: '  ' } }), path.join('/ud', 'benchmarks'));
+  });
+
+  it('uses LOCALWHISPER_DATA_DIR when it is an absolute path', () => {
+    assert.equal(
+      resolveBenchmarksDir({ userDataDir: '/ud', env: { LOCALWHISPER_DATA_DIR: '/data/lw' } }),
+      path.join('/data/lw', 'benchmarks')
+    );
+  });
+
+  it('rejects a relative LOCALWHISPER_DATA_DIR', () => {
+    assert.throws(
+      () => resolveBenchmarksDir({ userDataDir: '/ud', env: { LOCALWHISPER_DATA_DIR: 'relative/dir' } }),
+      /absolute path/
+    );
   });
 });
 

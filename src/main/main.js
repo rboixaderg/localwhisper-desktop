@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const { app, BrowserWindow, ipcMain, dialog, systemPreferences, globalShortcut, shell } = require('electron');
 const { loadConfig, saveConfig } = require('./config-store');
 const stt = require('./stt-service');
-const { createBenchmarkStore, ID_PATTERN } = require('./benchmark-store');
+const { createBenchmarkStore, resolveBenchmarksDir, ID_PATTERN } = require('./benchmark-store');
 const { createBenchmarkService } = require('./benchmark-service');
 const {
   normalizeGlossaryPrompt,
@@ -36,7 +36,7 @@ let benchmarks = null;
 function getBenchmarks() {
   if (!benchmarks) {
     const store = createBenchmarkStore({
-      rootDir: path.join(app.getPath('userData'), 'benchmarks'),
+      rootDir: resolveBenchmarksDir({ userDataDir: app.getPath('userData') }),
       appVersion: app.getVersion()
     });
     benchmarks = { store, service: createBenchmarkService({ store, stt }) };
@@ -301,7 +301,16 @@ ipcMain.handle('stt:transcribe', async (event, payload) => {
 ipcMain.handle('benchmarks:list', async (event) => {
   validateSender(event);
   const { store } = getBenchmarks();
-  return { dictations: await store.list(), usage: await store.usage() };
+  return { dictations: await store.list(), usage: await store.usage(), directory: store.rootDir };
+});
+
+ipcMain.handle('benchmarks:open-folder', async (event) => {
+  validateSender(event);
+  const { store } = getBenchmarks();
+  await fs.mkdir(store.rootDir, { recursive: true });
+  const error = await shell.openPath(store.rootDir);
+  if (error) throw new Error(error);
+  return store.rootDir;
 });
 
 ipcMain.handle('benchmarks:get', async (event, payload) => {

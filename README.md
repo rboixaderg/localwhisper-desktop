@@ -158,7 +158,12 @@ configuration. It is off by default; while it is off, no audio or transcript is
 stored.
 
 With it on, every completed dictation (started in the app, from the tray or
-with the global shortcut) is kept in `<user data>/benchmarks/<id>/`:
+with the global shortcut) is kept in `<user data>/benchmarks/<id>/` (on macOS,
+`~/Library/Application Support/localwhisper-desktop/benchmarks/`). The panel
+shows the exact location and has an **Open folder** button. To store them
+elsewhere, set `LOCALWHISPER_DATA_DIR` to an absolute path before launching the
+app; dictations then go to `$LOCALWHISPER_DATA_DIR/benchmarks/`. `config.json`
+always stays in the user data folder.
 
 - `audio.wav`: the original recording.
 - `dictation.json`: date, duration, selected language, app version, optional

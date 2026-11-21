@@ -1,0 +1,45 @@
+CHANGELOG.md
+  s_5f08cb4ccd6c58::t_2b23f8a01fcd2a 3-14
+README.md
+  s_5f08cb4ccd6c58::t_b8f962bd5fa463 92-94,153-189,239,355
+src/main/benchmark-service.js
+  s_5f08cb4ccd6c58::t_53812dece41fb2 1-152
+src/main/benchmark-store.js
+  s_5f08cb4ccd6c58::t_639a24fd85c061 1-343
+src/main/config-store.js
+  s_5f08cb4ccd6c58::t_5251ec995a4c7e 17-18,64-66
+src/main/main.js
+  s_5f08cb4ccd6c58::t_b90ca4a13b0c35 5-7,33-53,294-345
+src/main/preload.js
+  s_5f08cb4ccd6c58::t_07806eb159a3da 28-39
+src/main/stt-service.js
+  s_5f08cb4ccd6c58::t_fa78261acd0b01 136-150,196,199,203,225-242
+src/renderer/benchmarks.js
+  s_5f08cb4ccd6c58::t_9acd7635491e69 1-301
+src/renderer/index.html
+  s_5f08cb4ccd6c58::t_944cedcf3fba84 6,65-70,90-119,131
+src/renderer/renderer.js
+  s_5f08cb4ccd6c58::t_ecf60bbb9782f7 34,48-53,167,179,572-579,581,588,612,616-617
+src/renderer/styles.css
+  s_5f08cb4ccd6c58::t_f8c4a81b74be54 71-190
+test/benchmarks.test.js
+  s_5f08cb4ccd6c58::t_6bd2808f10adb0 1-294
+test/glossary-regressions.test.js
+  s_5f08cb4ccd6c58::t_552181ee4583ac 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6d16697b4ee5632cca0ce0bb63e9216059e6150c",
+  "prompts": {},
+  "sessions": {
+    "s_5f08cb4ccd6c58": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1fd3c-085d-739e-a856-40eae4e39e92",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Roger Boixader Güell <rboixaderg@gmail.com>"
+    }
+  }
+}

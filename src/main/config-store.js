@@ -14,7 +14,8 @@ const DEFAULT_CONFIG = {
   extraArgs: '',
   glossaryPrompt: '',
   substitutions: '',
-  shortcut: 'CommandOrControl+Shift+Space'
+  shortcut: 'CommandOrControl+Shift+Space',
+  saveBenchmarks: false
 };
 
 const MAX_PATH_LENGTH = 4096;
@@ -60,7 +61,9 @@ function sanitizeConfig(config, strict = false) {
     extraArgs,
     glossaryPrompt,
     substitutions,
-    shortcut
+    shortcut,
+    // Opt-in: only an explicit boolean true enables local dictation saving.
+    saveBenchmarks: merged.saveBenchmarks === true
   };
 }
 

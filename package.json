@@ -38,6 +38,10 @@
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0"
   },
+  "overrides": {
+    "minimatch@^9.0.3": "^11.0.9",
+    "minimatch@^10.2.5": "^11.0.9"
+  },
   "build": {
     "appId": "cat.roger.localwhisper",
     "productName": "LocalWhisper",

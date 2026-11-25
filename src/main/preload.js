@@ -25,7 +25,19 @@ contextBridge.exposeInMainWorld('localWhisperApi', {
   describeGlossary: (payload) => ipcRenderer.invoke('glossary:describe', payload),
   exportGlossary: (payload) => ipcRenderer.invoke('glossary:export', payload),
   importGlossary: () => ipcRenderer.invoke('glossary:import'),
-  transcribe: (audioBase64) => ipcRenderer.invoke('stt:transcribe', { audioBase64 }),
+  transcribe: (audioBase64, source) =>
+    ipcRenderer.invoke('stt:transcribe', { audioBase64, source }),
+  listBenchmarks: () => ipcRenderer.invoke('benchmarks:list'),
+  openBenchmarksFolder: () => ipcRenderer.invoke('benchmarks:open-folder'),
+  getBenchmark: (id) => ipcRenderer.invoke('benchmarks:get', { id }),
+  getBenchmarkAudio: (id) => ipcRenderer.invoke('benchmarks:get-audio', { id }),
+  reprocessBenchmark: (id, runId) =>
+    ipcRenderer.invoke('benchmarks:reprocess', { id, runId }),
+  retranscribeBenchmark: (id) => ipcRenderer.invoke('benchmarks:retranscribe', { id }),
+  setBenchmarkReference: (id, text) =>
+    ipcRenderer.invoke('benchmarks:set-reference', { id, text }),
+  deleteBenchmark: (id) => ipcRenderer.invoke('benchmarks:delete', { id }),
+  deleteAllBenchmarks: () => ipcRenderer.invoke('benchmarks:delete-all'),
   notifyRendererReady: () => ipcRenderer.invoke('renderer:ready'),
   setRecordingState: (isRecording, phase) =>
     ipcRenderer.invoke('recording:set-state', { isRecording, phase }),

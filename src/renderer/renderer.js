@@ -31,6 +31,7 @@ const domElements = {
   previewInput: document.getElementById("previewInput"),
   previewOutput: document.getElementById("previewOutput"),
   glossaryFileStatus: document.getElementById("glossaryFileStatus"),
+  saveBenchmarks: document.getElementById("saveBenchmarks"),
   shortcut: document.getElementById("shortcut"),
   clearShortcut: document.getElementById("clearShortcut"),
   saveConfig: document.getElementById("saveConfig"),
@@ -43,6 +44,12 @@ const domElements = {
   result: document.getElementById("result"),
   accessibilityBtn: document.getElementById("openAccessibility"),
 };
+
+function refreshBenchmarks() {
+  if (window.benchmarksUi && typeof window.benchmarksUi.refresh === "function") {
+    window.benchmarksUi.refresh();
+  }
+}
 
 function setConfigStatus(text, isError = false) {
   domElements.configStatus.textContent = text;
@@ -157,6 +164,7 @@ function getConfigFromUi() {
     glossaryPrompt: domElements.glossaryPrompt.value.trim(),
     substitutions: domElements.substitutions.value.trim(),
     shortcut: domElements.shortcut.value.trim(),
+    saveBenchmarks: domElements.saveBenchmarks.checked,
   };
 }
 
@@ -168,6 +176,7 @@ function setConfigToUi(config) {
   domElements.glossaryPrompt.value = config.glossaryPrompt || "";
   domElements.substitutions.value = config.substitutions || "";
   domElements.shortcut.value = config.shortcut || "";
+  domElements.saveBenchmarks.checked = config.saveBenchmarks === true;
 }
 
 async function loadInitialConfig() {
@@ -560,15 +569,23 @@ async function stopRecordingAndTranscribe() {
 
     setRecStatus("Transcribing...");
     syncRecordingState(false, "transcribing");
-    const text = await window.localWhisperApi.transcribe(audioBase64);
+    const outcome = await window.localWhisperApi.transcribe(
+      audioBase64,
+      source,
+    );
+    const text = outcome && outcome.text;
+    const benchmarkNote = outcome && outcome.benchmarkError
+      ? " (not saved for benchmarks: " + outcome.benchmarkError + ")"
+      : "";
     domElements.result.value = text || "[No text output]";
+    refreshBenchmarks();
 
     if (source === "shortcut" && text) {
       try {
         setRecStatus("Pasting text...");
         syncRecordingState(false, "pasting");
         await window.localWhisperApi.pasteText(text);
-        setRecStatus("Completed and pasted");
+        setRecStatus("Completed and pasted" + benchmarkNote, Boolean(benchmarkNote));
       } catch (pasteError) {
         const msg = pasteError.message || "";
         const isAccessibility =
@@ -592,10 +609,12 @@ async function stopRecordingAndTranscribe() {
         }
       }
     } else {
-      setRecStatus("Completed");
+      setRecStatus("Completed" + benchmarkNote, Boolean(benchmarkNote));
     }
   } catch (error) {
     setRecStatus(error.message || "Transcription error.", true);
+    // The audio may have been saved before the error; show it in the list.
+    refreshBenchmarks();
   } finally {
     state.isTranscribing = false;
     releaseRecordingResources();

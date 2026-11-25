@@ -133,8 +133,21 @@ async function findOutputTextInDir(dir) {
   return null;
 }
 
-async function transcribeAudio({ audioBase64, config }) {
-  const { whisperBinPath, modelPath, language, extraArgs, glossaryPrompt, substitutions } = config;
+/**
+ * Applies the post-transcription replacement rules to a raw Whisper
+ * transcript. Pure and Whisper-free, so saved raw text can be reprocessed
+ * with the current rules.
+ */
+function applyPostProcessing(rawText, config) {
+  const rules = parseSubstitutions(config && config.substitutions);
+  return rules.length ? applySubstitutions(rawText, rules) : rawText;
+}
+
+/**
+ * Runs Whisper and returns the raw transcript, before any replacement rule.
+ */
+async function transcribeRaw({ audioBase64, config }) {
+  const { whisperBinPath, modelPath, language, extraArgs, glossaryPrompt } = config;
 
   if (!audioBase64 || typeof audioBase64 !== 'string') {
     throw new Error('No audio data provided.');
@@ -163,11 +176,6 @@ async function transcribeAudio({ audioBase64, config }) {
 
     const args = buildArgs({ modelPath, audioPath, language, extraArgs, glossaryPrompt });
 
-    // Post-processing glossary. Applied to whatever the model returned, so it
-    // works the same with any model or quantization.
-    const rules = parseSubstitutions(substitutions);
-    const finish = (text) => (rules.length ? applySubstitutions(text, rules) : text);
-
     let result;
     try {
       result = await runWhisper(whisperBinPath, args, tmpDir);
@@ -185,14 +193,14 @@ async function transcribeAudio({ audioBase64, config }) {
     // stdout may contain non-text artifacts (e.g. "#"), so prefer the sidecar.
     if (usesOutputFile) {
       const sidecarText = await findOutputTextInDir(tmpDir);
-      if (sidecarText) return finish(sidecarText);
+      if (sidecarText) return sidecarText;
     }
 
-    if (stdoutText) return finish(stdoutText);
+    if (stdoutText) return stdoutText;
 
     // Fallback: check for sidecar files even without explicit output flag
     const sidecarText = await findOutputTextInDir(tmpDir);
-    if (sidecarText) return finish(sidecarText);
+    if (sidecarText) return sidecarText;
 
     const stderrText = (result.stderr || '').trim();
 
@@ -214,4 +222,21 @@ async function transcribeAudio({ audioBase64, config }) {
   }
 }
 
-module.exports = { transcribeAudio, parseExtraArgs, buildArgs, truncateStderr, isGpuCrash };
+/**
+ * Full pipeline: raw Whisper transcript plus replacement rules. The rules
+ * apply to whatever the model returned, so they work with any model.
+ */
+async function transcribeAudio({ audioBase64, config }) {
+  const rawText = await transcribeRaw({ audioBase64, config });
+  return applyPostProcessing(rawText, config);
+}
+
+module.exports = {
+  transcribeAudio,
+  transcribeRaw,
+  applyPostProcessing,
+  parseExtraArgs,
+  buildArgs,
+  truncateStderr,
+  isGpuCrash
+};

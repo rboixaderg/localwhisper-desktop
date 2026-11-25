@@ -30,7 +30,7 @@ wrong anyway.
  renderer: getUserMedia → 16 kHz mono WAV
      │
      ▼  base64 over IPC
- main: stt-service.transcribeAudio()
+ main: stt-service.transcribeRaw()  (called via benchmark-service.dictate() when saving benchmarks)
      │
      │  spawn whisper-cli -m MODEL -f input.wav -np -nt \
      │                    --prompt "<vocabulary>"  -l ca
@@ -174,8 +174,10 @@ a partially corrected transcript.
 
 ### 4.4 Code path
 
-`src/shared/glossary.js` → `applySubstitutions(text, rules)`, called from
-`finish()` in `transcribeAudio()`.
+`src/shared/glossary.js` → `applySubstitutions(text, rules)`, called through
+`applyPostProcessing()` in `src/main/stt-service.js` (used both by
+`transcribeAudio()` and by `benchmark-service.js` during live dictation and
+reprocessing).
 
 ## 5. Configuration and storage
 

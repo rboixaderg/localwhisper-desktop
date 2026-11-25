@@ -89,8 +89,9 @@ npm run dev
 4. Optional: configure language (`auto`, `en`, `es`, `ca`, ...).
 5. Optional: add extra args (`-ng`, `-otxt`, etc.).
 6. Optional: fill in the **Vocabulary prompt** and **Replacements** glossary (see below).
-7. Configure the global shortcut (default: `CommandOrControl+Shift+Space`).
-8. Click `Save Configuration`.
+7. Optional: tick **Save dictations for benchmarks** (off by default, see [Saved dictations](#saved-dictations-for-benchmarks)).
+8. Configure the global shortcut (default: `CommandOrControl+Shift+Space`).
+9. Click `Save Configuration`.
 
 ### Technical vocabulary and anglicisms
 
@@ -149,6 +150,50 @@ you still have to click `Save Configuration`, like any other change. A file
 without `[prompt]` / `[substitutions]` sections is treated as a plain rule
 list, so pasting one around works without ceremony.
 
+### Saved dictations for benchmarks
+
+To test changes to the replacement rules (or a future post-processor) against
+the same dictations, enable **Save dictations for benchmarks** and save the
+configuration. It is off by default; while it is off, no audio or transcript is
+stored.
+
+With it on, every completed dictation (started in the app, from the tray or
+with the global shortcut) is kept in `<user data>/benchmarks/<id>/` (on macOS,
+`~/Library/Application Support/localwhisper-desktop/benchmarks/`). The panel
+shows the exact location and has an **Open folder** button. To store them
+elsewhere, set `LOCALWHISPER_DATA_DIR` to an absolute path before launching the
+app; dictations then go to `$LOCALWHISPER_DATA_DIR/benchmarks/`. `config.json`
+always stays in the user data folder. On macOS and Linux, new benchmark
+directories and files use owner-only permissions. The app does not change the
+permissions of existing directories or WAV files.
+
+- `audio.wav`: the original recording.
+- `dictation.json`: date, duration, selected language, app version, optional
+  reference text, and a list of **runs**.
+
+Each run stores the raw Whisper transcript, the final text, its kind
+(`initial`, `reprocess` or `retranscribe`) and a non-secret summary of the
+settings used: model and binary file names (not full paths), language, extra
+args (values of flags that look like keys or tokens are redacted), vocabulary
+prompt and replacement rules.
+
+In the **Saved dictations** panel you can open a dictation and:
+
+- **Reprocess text**: re-apply the current replacement rules to a saved raw
+  transcript. Whisper is not run.
+- **Re-transcribe audio**: run Whisper again on the saved audio with the current
+  settings.
+- Compare all runs side by side. Every result is a new run; earlier runs are
+  never replaced.
+- Save a hand-corrected **reference transcript**.
+- Delete one dictation (with all its runs) or all of them. The panel shows the
+  disk space used. Nothing is deleted automatically.
+
+If transcription fails, the audio stays saved, the failed run is recorded with
+its error, and the error is shown. Recordings may contain private information.
+The files stay on your device and are never sent anywhere. The first version has
+no automatic quality score; comparison is manual.
+
 ### Manual recording (in-app)
 
 1. Click `Start Recording`, speak, then click `Stop & Transcribe`.
@@ -198,7 +243,7 @@ LocalWhisper Desktop processes all audio entirely on your device:
 - **Audio conversion** (WAV encoding) happens locally in the renderer process.
 - **Transcription** is performed by your local `whisper.cpp` binary spawned as a child process.
 - **No audio or text is sent to any external service.** The app itself makes no network requests.
-- The only data stored on disk is the configuration file (paths to your `whisper.cpp` binary, model, language, and shortcut preferences) in the Electron user data directory.
+- By default, the only data stored on disk is the configuration file (paths to your `whisper.cpp` binary, model, language, and shortcut preferences) in the Electron user data directory. If you enable **Save dictations for benchmarks**, recordings and transcripts are also stored there, on your device only.
 
 If you use the auto-paste feature (macOS only), transcribed text is temporarily placed in your system clipboard to simulate `Cmd+V`. The text remains in your clipboard after the operation.
 
@@ -314,6 +359,7 @@ npm run generate:tray-icons   # Regenerate tray icons from code
 - Transcription depends on the flags available in your `whisper.cpp` binary.
 - By default, `-np -nt` and any args in `Extra args` are appended.
 - The vocabulary prompt is passed as `--prompt <text>` (two separate argv entries, no quoting needed). If you already pass `--prompt` in `Extra args`, that one wins and the field is ignored. The app keeps the first 600 characters; whisper.cpp keeps the last ~224 tokens of that submitted text. The UI warns using a conservative UTF-8 byte upper bound, not a tokenizer count.
+- `src/main/stt-service.js` exposes `transcribeRaw()` (Whisper only) and `applyPostProcessing()` (replacement rules) separately; `transcribeAudio()` chains them. Saved dictations (`src/main/benchmark-store.js`, `benchmark-service.js`) reuse the raw text without running Whisper again.
 - Replacements are applied to the final text in `src/main/stt-service.js`, so they also affect automatic paste and the in-app textarea. Matching is whole-word and case-insensitive, longer keys first, and rules are applied in sequence.
 - Glossary limits: 600 characters for the prompt, 4,000 for the rule list, 200 rules, 80 characters per left side, 128 KB per imported file. Oversized replacement lists are rejected on save, export and import, never cut mid-rule. Chained replacements stop with an error above 500,000 output characters or 100,000 matches.
 - See [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for the full mechanics, the IPC contract, and the rejected alternatives.

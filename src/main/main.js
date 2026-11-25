@@ -328,7 +328,7 @@ ipcMain.handle('benchmarks:list', async (event) => {
 ipcMain.handle('benchmarks:open-folder', async (event) => {
   validateSender(event);
   const { store } = getBenchmarks();
-  await fs.mkdir(store.rootDir, { recursive: true });
+  await store.ensureRootDir();
   const error = await shell.openPath(store.rootDir);
   if (error) throw new Error(error);
   return store.rootDir;

@@ -86,6 +86,25 @@ describe('benchmark store', () => {
     assert.equal((await reopened.list()).length, 1);
   });
 
+  it('keeps new benchmark directories and files private on POSIX', { skip: process.platform === 'win32' }, async () => {
+    const previousUmask = process.umask(0o022);
+    try {
+      const mode = async (file) => (await fs.stat(file)).mode & 0o777;
+      const { id } = await store.createDictation({ audio: wavBuffer() });
+      const dictationDir = path.join(store.rootDir, id);
+      const metadata = path.join(dictationDir, 'dictation.json');
+      assert.deepEqual(await Promise.all([
+        mode(store.rootDir), mode(dictationDir), mode(path.join(dictationDir, 'audio.wav')), mode(metadata)
+      ]), [0o700, 0o700, 0o600, 0o600]);
+
+      await store.addRun(id, { kind: 'initial', rawText: 'raw', text: 'final' });
+      assert.equal(await mode(metadata), 0o600);
+      assert.equal((await store.getDictation(id)).runs[0].text, 'final');
+    } finally {
+      process.umask(previousUmask);
+    }
+  });
+
   it('appends runs without touching earlier ones, even concurrently', async () => {
     const { id } = await store.createDictation({ audio: wavBuffer() });
     await Promise.all(
@@ -328,8 +347,8 @@ describe('applyPostProcessing', () => {
   });
 });
 
-describe('main IPC with invalid LOCALWHISPER_DATA_DIR', () => {
-  function loadMainHandlers(config, envDir) {
+describe('main benchmark IPC', () => {
+  function loadMainHandlers(config, envDir, shell = {}) {
     const handlers = new Map();
     const prevEnv = process.env.LOCALWHISPER_DATA_DIR;
     process.env.LOCALWHISPER_DATA_DIR = envDir;
@@ -341,7 +360,7 @@ describe('main IPC with invalid LOCALWHISPER_DATA_DIR', () => {
         dialog: {},
         systemPreferences: {},
         globalShortcut: {},
-        shell: {}
+        shell
       },
       './config-store': { loadConfig: async () => config, saveConfig: async (c) => c },
       './stt-service': fakeStt(),
@@ -372,6 +391,24 @@ describe('main IPC with invalid LOCALWHISPER_DATA_DIR', () => {
   }
 
   const event = { senderFrame: { url: 'file:///app/index.html' } };
+
+  it('creates a private benchmarks directory when opening it before saving', { skip: process.platform === 'win32' }, async () => {
+    const opened = [];
+    const { handlers, restore } = loadMainHandlers(baseConfig, dir, {
+      openPath: async (folder) => { opened.push(folder); return ''; }
+    });
+    const previousUmask = process.umask(0o022);
+    try {
+      const folder = path.join(dir, 'benchmarks');
+      assert.equal(await handlers.get('benchmarks:open-folder')(event), folder);
+      assert.deepEqual(opened, [folder]);
+      assert.equal((await fs.stat(folder)).mode & 0o777, 0o700);
+      assert.deepEqual(await fs.readdir(folder), []);
+    } finally {
+      process.umask(previousUmask);
+      restore();
+    }
+  });
 
   it('still dictates when LOCALWHISPER_DATA_DIR is relative and saving is off', async () => {
     const { handlers, restore } = loadMainHandlers({ ...baseConfig, saveBenchmarks: false }, 'relative/dir');

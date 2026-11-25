@@ -141,7 +141,7 @@ function summarizeConfig(config) {
 async function writeJsonAtomic(file, value) {
   const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   try {
-    await fs.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8');
+    await fs.writeFile(tmp, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
     await fs.rename(tmp, file);
   } catch (error) {
     await fs.rm(tmp, { force: true }).catch(() => {});
@@ -217,6 +217,10 @@ function createBenchmarkStore({ rootDir, appVersion = '' }) {
     return entry;
   }
 
+  async function ensureRootDir() {
+    await fs.mkdir(rootDir, { recursive: true, mode: 0o700 });
+  }
+
   async function createDictation({ audio, language = 'auto', source = 'unknown', now = new Date() }) {
     if (!Buffer.isBuffer(audio) || audio.length === 0) {
       throw new Error('No audio to save.');
@@ -238,9 +242,10 @@ function createBenchmarkStore({ rootDir, appVersion = '' }) {
       runs: []
     };
 
-    await fs.mkdir(dir, { recursive: true });
+    await ensureRootDir();
+    await fs.mkdir(dir, { mode: 0o700 });
     try {
-      await fs.writeFile(path.join(dir, AUDIO_FILE), audio);
+      await fs.writeFile(path.join(dir, AUDIO_FILE), audio, { mode: 0o600 });
       await writeJsonAtomic(path.join(dir, META_FILE), meta);
     } catch (error) {
       await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
@@ -377,6 +382,7 @@ function createBenchmarkStore({ rootDir, appVersion = '' }) {
 
   return {
     rootDir,
+    ensureRootDir,
     createDictation,
     addRun,
     setReference,

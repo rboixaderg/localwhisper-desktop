@@ -163,7 +163,9 @@ with the global shortcut) is kept in `<user data>/benchmarks/<id>/` (on macOS,
 shows the exact location and has an **Open folder** button. To store them
 elsewhere, set `LOCALWHISPER_DATA_DIR` to an absolute path before launching the
 app; dictations then go to `$LOCALWHISPER_DATA_DIR/benchmarks/`. `config.json`
-always stays in the user data folder.
+always stays in the user data folder. On macOS and Linux, new benchmark
+directories and files use owner-only permissions. The app does not change the
+permissions of existing directories or WAV files.
 
 - `audio.wav`: the original recording.
 - `dictation.json`: date, duration, selected language, app version, optional
